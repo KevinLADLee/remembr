@@ -129,7 +129,7 @@ print(response.position)
 
     ```bash
     cd examples/chat_demo
-    python demo.py --rosbag_enabled --llm_backend deepseek-r1:70b
+    python -u demo.py --rosbag_enabled --llm_backend deepseek-r1:70b
     ```
 2. Open your web browser to load your ROSBag and query the agent
 

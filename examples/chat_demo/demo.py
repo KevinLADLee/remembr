@@ -85,7 +85,7 @@ class GradioDemo:
         proc = StoppableThread(target=mem_builder)
         proc.start()
 
-        bag_process = subprocess.Popen(["ros2", "bag", "play", fileobj],  stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
+        bag_process = subprocess.Popen(["ros2", "bag", "play", fileobj.name],  stdout=subprocess.DEVNULL,stderr=subprocess.STDOUT)
 
         while True:
             ret_code = bag_process.poll()
@@ -159,6 +159,14 @@ class GradioDemo:
                 with gr.Column(scale=1):
                     output_log = gr.Textbox(label="Inference log")
 
+                with gr.Column(scale=1):
+
+                    db_uri_box = gr.Textbox(label="Database URI", value="http://127.0.0.1:19530")
+
+                    selector = self.get_options(args.db_uri)
+                    with gr.Column(scale=1):
+                        refresh = gr.Button("Refresh Options")
+                        set = gr.Button("Set Collection")
 
                 with gr.Row():
                     # only have this section if we have ROS enabled
@@ -171,14 +179,6 @@ class GradioDemo:
                             file_upload = gr.File()
                             file_upload.upload(self.process_file, inputs=[file_upload, upload_name, pos_topic, image_topic, db_uri_box])    
 
-                with gr.Column(scale=1):
-
-                    db_uri_box = gr.Textbox(label="Database URI", value="http://127.0.0.1:19530")
-
-                    selector = self.get_options(args.db_uri)
-                    with gr.Column(scale=1):
-                        refresh = gr.Button("Refresh Options")
-                        set = gr.Button("Set Collection")
 
             msg.submit(chatter, [msg, chatbot], [msg, chatbot, output_log])
             

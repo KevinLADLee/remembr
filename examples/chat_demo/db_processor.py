@@ -24,6 +24,7 @@ import time
 from PIL import Image as PILImage
 
 import sys
+import pprint
 
 from remembr.captioners.vila_captioner import VILACaptioner
 from remembr.memory.memory import MemoryItem
@@ -47,7 +48,7 @@ def memory_builder_args(args=None):
     parser.add_argument("--top_p", type=float, default=None)
     parser.add_argument("--num_beams", type=int, default=1)
     parser.add_argument("--max_new_tokens", type=int, default=512)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
     return args
 
@@ -98,7 +99,7 @@ class ROSMemoryBuilder(Node):
                 self.img_listener_callback,
                 10)
 
-        if 'odom' in pos_topic:
+        if 'odom' in pos_topic.lower():
             self.pose_sub = self.create_subscription(
                 Odometry,
                 pos_topic,
@@ -123,7 +124,7 @@ class ROSMemoryBuilder(Node):
 
     def pose_listener_callback(self, odom_msg):
         # self.get_logger().info('I heard: "%s"' % msg.data)
-        print("Got a synchronized message")
+        # print("Got a synchronized message")
         # we can also only accept every third message
         position = np.array([odom_msg.pose.pose.position.x, odom_msg.pose.pose.position.y, odom_msg.pose.pose.position.z])
         quat = np.array([odom_msg.pose.pose.orientation.x, odom_msg.pose.pose.orientation.y, odom_msg.pose.pose.orientation.z,odom_msg.pose.pose.orientation.w])
@@ -185,14 +186,14 @@ class ROSMemoryBuilder(Node):
                 }
             self.vila_executor.submit(self.process_into_db(self.image_buffer, pose_dict))
             after_time = time.time()
-            print("Time to compute =", after_time - before_time)
+            # print("Time to compute =", after_time - before_time)
             self.data_buffer = [[]]
             self.start_time = converted_time # TODO: Check if this is valid
             self.image_buffer = []
             self.pose_buffer = []
 
     def process_into_db(self, image_buffer, pose_dict):
-        print('******************* Processing', len(image_buffer))
+        # print('******************* Processing', len(image_buffer))
         images = []
         positions = []
         orientations = []
@@ -203,7 +204,7 @@ class ROSMemoryBuilder(Node):
         orientations = pose_dict['orientation']
 
         out_text = out_text = self.captioner.caption(images)
-        print(out_text)
+        # print(out_text)
 
         mid_time = (image_buffer[0]['time'] + image_buffer[-1]['time'])/2
 
@@ -213,7 +214,7 @@ class ROSMemoryBuilder(Node):
             'time': mid_time,
             'caption': out_text,
         }
-
+        pprint.pprint(entity)
         entity = MemoryItem.from_dict(entity)
         self.memory.insert(entity)
 
