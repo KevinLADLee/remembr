@@ -9,6 +9,7 @@ out_old
 
 # milvus-related
 embedEtcd.yaml
+user.yaml
 *.lock
 volumes
 

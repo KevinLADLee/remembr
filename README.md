@@ -15,12 +15,10 @@ questions like "How long were you in the building for?"
 <a id="setup"></a>
 ## Setup
 
-1. Download VILA
+1. Clone the repository
 
     ```
-    mkdir deps
-    cd deps
-    git clone https://github.com/NVlabs/VILA.git
+    git clone --recurse-submodules https://github.com/HuskyRye/remembr.git
     ./vila_setup.sh remembr
     ```
 
@@ -28,21 +26,29 @@ questions like "How long were you in the building for?"
 
     ```
     curl -fsSL https://ollama.com/install.sh | sh
+    ollama pull codestral
+    # ollama pull deepseek-r1:70b
     ```
 
 3. Install other Python dependencies
 
+    > Note: Ignore pip's dependency ERROR
+
     ```
     conda activate remembr
     python -m pip install -r requirements.txt
+    python -m pip install -e .
+    conda install -c conda-forge gcc=12.1.0
     ```
 
 4. Install MilvusDB
 
-    > `docker` must be installed on the system to easily use Milvus by simply running the command below. This script will automatically launch MilvusDB on a docker container. Otherwise, the user must install MilvusDB from scratch themselves
+    > `docker` must be installed on the system to easily use Milvus by simply running the command below. This script will automatically launch MilvusDB on a docker container. Otherwise, the user must install MilvusDB from scratch themselves.
+
+    https://milvus.io/docs/install_standalone-docker.md
 
     ```
-    bash launch_milvus_container.sh
+    bash standalone_embed.sh start
     ```
 
 <a id="usage"></a>
@@ -123,7 +129,7 @@ print(response.position)
 
     ```bash
     cd examples/chat_demo
-    python demo.py
+    python demo.py --rosbag_enabled --llm_backend deepseek-r1:70b
     ```
 2. Open your web browser to load your ROSBag and query the agent
 

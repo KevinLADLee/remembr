@@ -32,3 +32,6 @@ python -m pip install git+https://github.com/huggingface/transformers@v4.37.2
 site_pkg_path=$(python -c 'import site; print(site.getsitepackages()[0])')
 cp -rv ./llava/train/transformers_replace/* $site_pkg_path/transformers/
 cp -rv ./llava/train/deepspeed_replace/* $site_pkg_path/deepspeed/
+
+# Downgrade protobuf to 3.20 for backward compatibility
+pip install protobuf==3.20.*
