@@ -259,7 +259,7 @@ class ReMEmbRAgent(Agent):
         if response.tool_calls:
             for tool_call in response.tool_calls:
                 if tool_call['name'] != "__conversational_response":
-                    args = re.sub("\{.*?\}", "", str(tool_call['args'])) # remove curly braces
+                    args = re.sub("[{}]", "", str(tool_call['args'])) # remove curly braces
                     self.previous_tool_requests += f"I previously used the {tool_call['name']} tool with the arguments: {args}.\n"
 
         self.agent_call_count += 1
