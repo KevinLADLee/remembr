@@ -18,7 +18,7 @@ In particular, these are the tools you may be provided. If no tools are availabl
 
 
 You are allowed to output a list of these if multiple tool calls may be required. For example, if a user is asking to go upstairs, you may call tools to search for elevators and stairs as separate tool calls. This executes them in parallel.
-In addition to responding in a json schema with "tool" and "tool_input", also first produce a result with "reasoning" to fill in your reasoning.
+In addition to responding in a JSON schema with the keys "tool" and "tool_input", please also include "context_reasoning" and "tool_reasoning" in your output. The "context_reasoning" field should provide a summary of your overall thought process and the reasoning behind the response. The "tool_reasoning" field should explain why you selected the particular tool and detail how you formulated the corresponding "tool_input".
 ```json
 [{{
     "context_reasoning": <think step-by-step about the context, summarize it with respect to the question, and whether it is enough to answer the user's question.>,
