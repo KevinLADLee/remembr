@@ -1,0 +1,24 @@
+services:
+  remembr:
+    image: registry.cn-hangzhou.aliyuncs.com/kevinlad/remembr:dev-2
+    container_name: remembr
+    privileged: true
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    ipc: host
+    network_mode: host
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      stack: 67108864
+    environment:
+      - HF_ENDPOINT=https://hf-mirror.com
+      - OPENAI_API_KEY=xxx
+    stdin_open: true
+    tty: true

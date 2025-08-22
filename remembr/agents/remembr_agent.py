@@ -5,6 +5,7 @@ import sys, re
 # from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
+from langchain_openai import ChatOpenAI
 from langchain_community.chat_models import ChatOllama
 from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
@@ -122,9 +123,13 @@ class ReMEmbRAgent(Agent):
     def llm_selector(self, llm_type, temperature, num_ctx):
         llm = None
         # Support for LLM Gateway
-        if 'gpt-4' in llm_type:
+        if 'gpt-5' in llm_type:
             # TODO: ADD OpenAI here
-            pass
+            llm = ChatOpenAI(
+                model="gpt-5",
+                temperature=temperature,
+                base_url="https://api.chsdw.top/v1"
+            )
 
         # Support for NIMs
         elif 'nim/' in llm_type:

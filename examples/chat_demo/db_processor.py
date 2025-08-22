@@ -66,7 +66,7 @@ def create_and_launch_memory_builder(args=None, **kwargs):
 class ROSMemoryBuilder(Node):
 
     def __init__(self, args, segment_time=3, \
-                image_topic='/front_stereo_camera/left/image_raw', \
+                image_topic='/camera/color/image_raw', \
                 collection_name="test", db_ip="127.0.0.1", \
                 pos_topic='/amcl_pose', queue_size=1000):
         
