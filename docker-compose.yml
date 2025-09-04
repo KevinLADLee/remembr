@@ -1,6 +1,6 @@
 services:
   remembr:
-    image: registry.cn-hangzhou.aliyuncs.com/kevinlad/remembr:dev-2
+    image: registry.cn-hangzhou.aliyuncs.com/kevinlad/remembr:latest
     container_name: remembr
     privileged: true
     deploy:
@@ -10,7 +10,9 @@ services:
             - driver: nvidia
               count: all
               capabilities: [gpu]
+    user: appuser
     ipc: host
+    pid: host
     network_mode: host
     ulimits:
       memlock:
@@ -19,6 +21,8 @@ services:
       stack: 67108864
     environment:
       - HF_ENDPOINT=https://hf-mirror.com
+      # Add your OpenAI API key here if needed
       - OPENAI_API_KEY=xxx
+      - OPENAI_BASE_URL=https://api.openai.com/v1
     stdin_open: true
     tty: true
