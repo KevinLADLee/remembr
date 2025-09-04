@@ -400,8 +400,15 @@ class ReMEmbRAgent(Agent):
         }
 
         out = self.graph.invoke(inputs)
+
+        # print("Raw output:")
+        # print(out)
+
         response = out['messages'][-1]
         response = ''.join(response.content.splitlines())
+
+        # print("Raw response:")
+        # print(response)
 
         if '```json' not in response:
             # try parsing on its own since we cannot always trust llms
