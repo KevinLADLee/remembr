@@ -5,8 +5,9 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from std_msgs.msg import String
 from remembr.memory.milvus_memory import MilvusMemory
 from remembr.agents.remembr_agent import ReMEmbRAgent
-from scipy.spatial.transform import Rotation as R
 import traceback
+
+from scipy.spatial.transform import Rotation as R
 import numpy as np
 
 from common_utils import format_pose_msg

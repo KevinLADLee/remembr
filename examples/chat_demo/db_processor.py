@@ -26,7 +26,10 @@ from PIL import Image as PILImage
 import sys
 import pprint
 
-from remembr.captioners.vila_captioner import VILACaptioner
+# from remembr.captioners.vila_captioner import VILACaptioner
+from remembr.captioners.remote_captioner import RemoteAPICaptioner
+from remembr.captioners.remote_captioner import build_argparser
+
 from remembr.memory.memory import MemoryItem
 from remembr.memory.milvus_memory import MilvusMemory
 from PIL import Image as im
@@ -37,7 +40,7 @@ import concurrent
 def memory_builder_args(args=None):
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model-path", type=str, default="Efficient-Large-Model/VILA1.5-3b")
+    # parser.add_argument("--model-path", type=str, default="Efficient-Large-Model/VILA1.5-3b")
     parser.add_argument("--model-base", type=str, default=None)
 
     parser.add_argument("--num-video-frames", type=int, default=6)
@@ -114,7 +117,8 @@ class ROSMemoryBuilder(Node):
 
         self.counter = 0
 
-        self.captioner = VILACaptioner(args)
+        # self.captioner = VILACaptioner(args)
+        self.captioner = RemoteAPICaptioner(build_argparser())
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
 
     def spin(self):

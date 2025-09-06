@@ -91,7 +91,7 @@ class VILACaptioner(Captioner):
                     qs = (image_token_se + "\n") * len(images) + qs
                 else:
                     qs = (DEFAULT_IMAGE_TOKEN + "\n") * len(images) + qs
-        # print("input: ", qs)
+        print("input: ", qs)
 
 
 
