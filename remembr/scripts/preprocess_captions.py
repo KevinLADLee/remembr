@@ -10,7 +10,7 @@ import sys
 
 # load this directory
 sys.path.append(sys.path[0] + '/..')
-from captioners.vila_captioner import VILACaptioner
+from captioners.remote_captioner import RemoteCaptioner
 from utils.util import get_frames
 import pickle as pkl
 from PIL import Image as PILImage
@@ -56,7 +56,7 @@ def run_video_in_segs(args):
             current_segment.append(file)
 
     embedder = HuggingFaceEmbeddings(model_name='mixedbread-ai/mxbai-embed-large-v1')
-    vila_model = VILACaptioner(args)
+    captioner = RemoteCaptioner()
 
     # if exists, then exit
     # captions_location = f'./data/{SEQUENCE_ID}/captions'
@@ -99,7 +99,7 @@ def run_video_in_segs(args):
         # let's sample the images down to args.num_video_frames
         images = images[::30//args.num_video_frames]
 
-        out_text = vila_model.caption(images)
+        out_text = captioner.caption(images)
 
         print(out_text)
         filename_start = os.path.basename(file_names[0])

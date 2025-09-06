@@ -41,18 +41,19 @@ dependencies:
   - xz=5.6.4=h5eee18b_1
   - zlib=1.2.13=h5eee18b_1
   - pip:
-      - accelerate==0.33.0
       - aiofiles==23.2.1
       - aiohappyeyeballs==2.6.1
       - aiohttp==3.12.15
       - aiosignal==1.4.0
       - altair==5.5.0
+      - annotated-types==0.7.0
       - anyio==4.10.0
       - async-timeout==4.0.3
       - attrs==25.3.0
       - av==15.0.0
       - bitsandbytes==0.41.0
       - braceexpand==0.1.7
+      - brotli==1.1.0
       - certifi==2025.8.3
       - cfgv==3.4.0
       - charset-normalizer==3.4.3
@@ -61,8 +62,6 @@ dependencies:
       - cycler==0.12.1
       - dataclasses-json==0.6.7
       - datasets==2.16.1
-      - decord==0.6.0
-      - deepspeed==0.9.5
       - dill==0.3.7
       - distlib==0.4.0
       - distro==1.9.0
@@ -81,20 +80,23 @@ dependencies:
       - fvcore==0.1.5.post20221221
       - gitdb==4.0.12
       - gitpython==3.1.45
-      - gradio==3.50.2
-      - gradio-client==0.6.1
+      - gradio==5.44.1
+      - gradio-client==1.12.1
       - greenlet==3.2.4
+      - groovy==0.1.2
       - grpcio==1.74.0
       - h11==0.16.0
       - hf-xet==1.1.7
       - hjson==3.1.0
       - httpcore==1.0.9
       - httpx==0.28.1
+      - httpx-sse==0.4.1
       - huggingface-hub==0.34.4
       - identify==2.6.13
       - idna==3.10
       - importlib-resources==6.5.2
       - iniconfig==2.1.0
+      - inquirerpy==0.3.4
       - iopath==0.1.10
       - jinja2==3.1.6
       - jiter==0.10.0
@@ -104,18 +106,18 @@ dependencies:
       - jsonschema==4.25.0
       - jsonschema-specifications==2025.4.1
       - kiwisolver==1.4.9
-      - langchain==0.2.17
-      - langchain-community==0.2.19
-      - langchain-core==0.2.43
-      - langchain-huggingface==0.0.3
-      - langchain-nvidia-ai-endpoints==0.2.2
-      - langchain-openai==0.1.25
-      - langchain-text-splitters==0.2.4
+      - langchain==0.3.27
+      - langchain-community==0.3.29
+      - langchain-core==0.3.75
+      - langchain-huggingface==0.3.1
+      - langchain-milvus==0.2.1
+      - langchain-openai==0.3.32
+      - langchain-text-splitters==0.3.11
       - langgraph==0.4.0
       - langgraph-checkpoint==2.1.1
       - langgraph-prebuilt==0.1.8
       - langgraph-sdk==0.2.0
-      - langsmith==0.1.147
+      - langsmith==0.4.25
       - latex2mathml==3.78.0
       - levenshtein==0.27.1
       - linkify-it-py==2.0.3
@@ -136,7 +138,7 @@ dependencies:
       - ninja==1.13.0
       - nltk==3.3
       - nodeenv==1.9.1
-      - numpy==1.26.0
+      - numpy==1.26.4
       - nvidia-cublas-cu12==12.1.3.1
       - nvidia-cuda-cupti-cu12==12.1.105
       - nvidia-cuda-nvrtc-cu12==12.1.105
@@ -159,20 +161,23 @@ dependencies:
       - packaging==24.2
       - pandas==2.3.1
       - parameterized==0.9.0
-      - peft==0.17.0
+      - pfzy==0.3.4
       - pillow==10.4.0
       - pip==25.2
       - platformdirs==4.3.8
       - pluggy==1.6.0
       - portalocker==3.2.0
       - pre-commit==4.3.0
+      - prompt-toolkit==3.0.52
       - propcache==0.3.2
       - protobuf==6.32.0
       - psutil==7.0.0
       - py-cpuinfo==9.0.0
       - pyarrow==21.0.0
       - pyarrow-hotfix==0.7
-      - pydantic==1.10.18
+      - pydantic==2.11.7
+      - pydantic-core==2.33.2
+      - pydantic-settings==2.10.1
       - pydub==0.25.1
       - pygments==2.19.2
       - pymilvus==2.6.0
@@ -188,11 +193,13 @@ dependencies:
       - rapidfuzz==3.13.0
       - referencing==0.36.2
       - regex==2025.7.33
-      - requests==2.32.4
+      - requests==2.32.5
       - requests-toolbelt==1.0.0
       - rich==14.1.0
       - rpds-py==0.27.0
+      - ruff==0.12.12
       - s2wrapper==0.1
+      - safehttpx==0.1.6
       - safetensors==0.6.2
       - scikit-learn==1.2.2
       - scipy==1.15.3
@@ -200,6 +207,7 @@ dependencies:
       - sentence-transformers==5.1.0
       - sentencepiece==0.1.99
       - sentry-sdk==2.35.0
+      - shellingham==1.5.4
       - shortuuid==1.0.13
       - shtab==1.7.2
       - six==1.17.0
@@ -217,24 +225,27 @@ dependencies:
       - timm==0.9.12
       - tokenizers==0.21.4
       - tomli==2.2.1
+      - tomlkit==0.13.3
       - torch==2.3.0
       - torchvision==0.18.0
       - tqdm==4.67.1
       - transformers==4.55.2
       - triton==2.3.0
       - typeguard==4.4.4
+      - typer==0.17.4
       - typing-extensions==4.14.1
       - typing-inspect==0.9.0
+      - typing-inspection==0.4.1
       - tyro==0.9.28
       - tzdata==2025.2
       - uc-micro-py==1.0.3
       - ujson==5.10.0
       - urllib3==2.5.0
       - uvicorn==0.35.0
-      - vila==1.0.0
       - virtualenv==20.34.0
       - wandb==0.21.1
       - wavedrom==2.0.3.post3
+      - wcwidth==0.2.13
       - webdataset==0.2.86
       - websockets==11.0.3
       - wn==0.13.0
@@ -242,4 +253,5 @@ dependencies:
       - xxhash==3.5.0
       - yacs==0.1.8
       - yarl==1.20.1
+      - zstandard==0.24.0
 prefix: /opt/conda/envs/remembr

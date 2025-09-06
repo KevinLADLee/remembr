@@ -2,12 +2,10 @@ from typing import Annotated, Literal, Sequence, TypedDict
 import traceback
 import sys, re
 
-# from langchain_openai import OpenAIEmbeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from langchain_openai import ChatOpenAI
 from langchain_community.chat_models import ChatOllama
-from langchain_nvidia_ai_endpoints import ChatNVIDIA
 
 from langchain_core.prompts import PromptTemplate
 from langchain.prompts import (
@@ -21,7 +19,7 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.utils.function_calling import convert_to_openai_function
 
 from langchain.tools import StructuredTool
-from langchain_core.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 
 
 import sys, os
@@ -123,18 +121,15 @@ class ReMEmbRAgent(Agent):
     def llm_selector(self, llm_type, temperature, num_ctx):
         llm = None
         # Support for LLM Gateway
-        if 'gpt-5' in llm_type:
-            # TODO: ADD OpenAI here
+        if 'gpt-5' or 'gpt-4o' in llm_type:
+            base_url = os.getenv("OPENAI_BASE_URL", "https://api.chsdw.top/v1")
             llm = ChatOpenAI(
-                model="gpt-5",
+                model=llm_type,
                 temperature=temperature,
-                base_url="https://api.chsdw.top/v1"
+                base_url=base_url,
+                timeout=300,
+                max_retries=5
             )
-
-        # Support for NIMs
-        elif 'nim/' in llm_type:
-            llm_name = llm_type[4:]
-            llm = ChatNVIDIA(model=llm_name)
 
         # Support for Ollama functions
         elif llm_type == 'command-r':
@@ -177,11 +172,11 @@ class ReMEmbRAgent(Agent):
         )
 
         class PositionRetrieverInput(BaseModel):
-            x: tuple = Field(description="The query that will be searched by finding the nearest memories at this (x,y,z) position.\
-                                The query must be an (x,y,z) array with floating point values \
-                                Based on the question and your context, decide what position to search for in the database. \
-                                This query argument should be a position such as (0.5, 0.2, 0.1). They should NOT be a string. \
-                                The query will then search your memories for you.")
+            x: tuple[float, float, float] = Field(description="The query that will be searched by finding the nearest memories at this (x,y,z) position.\
+                                                    The query must be an (x,y,z) array with floating point values \
+                                                    Based on the question and your context, decide what position to search for in the database. \
+                                                    This query argument should be a position such as (0.5, 0.2, 0.1). They should NOT be a string. \
+                                                    The query will then search your memories for you.")
         # position-based tool
         self.position_retriever_tool = StructuredTool.from_function(
             func=lambda x: memory.search_by_position(x),
@@ -427,13 +422,15 @@ if __name__ == "__main__":
 
     # llm_name = 
     # Options: 'nim/meta/llama-3.1-405b-instruct', 'gpt-4o', or any Ollama LLMs (such as 'codestral')
-    memory = MilvusMemory("test", db_ip='127.0.0.1')
+    memory = MilvusMemory("testollama0906", db_ip='127.0.0.1')
 
     llm_name = 'gpt-4o' 
     agent = ReMEmbRAgent(llm_type=llm_name)
 
     agent.set_memory(memory)
 
+    print("Agent ready")
     response = agent.query("Where can I sit?")
+    print(response)
     response = agent.query_position("Where can I sit?")
-
+    print

@@ -1,10 +1,6 @@
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import QoSProfile
-from rclpy.clock import Clock
-from rclpy.qos import qos_profile_sensor_data
 
-from std_msgs.msg import String
 from sensor_msgs.msg import Image, CompressedImage
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped
@@ -12,21 +8,15 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-import cv2
 from cv_bridge import CvBridge
 bridge = CvBridge()
 
-import message_filters
-import collections
 import argparse
 
 import time
-from PIL import Image as PILImage
 
-import sys
 import pprint
 
-# from remembr.captioners.vila_captioner import VILACaptioner
 from remembr.captioners.remote_captioner import RemoteAPICaptioner
 
 from remembr.memory.memory import MemoryItem
@@ -116,7 +106,6 @@ class ROSMemoryBuilder(Node):
 
         self.counter = 0
 
-        # self.captioner = VILACaptioner(args)
         self.captioner = RemoteAPICaptioner()
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
         print("Initialized ROSMemoryBuilder")

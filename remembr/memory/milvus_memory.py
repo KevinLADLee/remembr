@@ -1,5 +1,6 @@
 from dataclasses import dataclass, asdict
 
+import asyncio
 import datetime, time
 from time import strftime, localtime
 from typing import Any, List, Optional, Tuple
@@ -8,7 +9,7 @@ import numpy as np
 
 from remembr.memory.memory import Memory, MemoryItem
 
-from langchain_community.vectorstores import Milvus
+from langchain_milvus import Milvus
 from langchain_huggingface import HuggingFaceEmbeddings
 
 from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
@@ -16,6 +17,15 @@ from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Colle
 
 FIXED_SUBTRACT=1721761000 # this is just a large value that brings us close to 1970
 
+
+
+def ensure_event_loop():
+    """Make sure current thread has an asyncio event loop (Py3.10+ / 3.11+ 均可)."""
+    try:
+        asyncio.get_running_loop()  # 3.7+，若没有循环会抛 RuntimeError
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
 
 class MilvusWrapper:
@@ -141,32 +151,37 @@ class MilvusMemory(Memory):
         if drop_collection:
             print("Resetting memory. We are dropping the current collection")
 
+        ensure_event_loop()
+
         self.milv_wrapper = MilvusWrapper(self.db_collection_name, self.db_ip, self.db_port, drop_collection=drop_collection)
 
         text_vector_db = Milvus(
             self.embedder,
-            connection_args={"host": self.db_ip, "port": self.db_port},
+            connection_args={"uri": f"http://{self.db_ip}:{self.db_port}"},
             collection_name=self.db_collection_name,
             vector_field='text_embedding',
             text_field='caption',
+            primary_field='id',
         )
         self.text_retriever = text_vector_db.as_retriever(search_kwargs={"k": 5})
 
 
         self.position_vector_db = Milvus(
             self.embedder, # we will ignore this
-            connection_args={"host": self.db_ip, "port": self.db_port},
+            connection_args={"uri": f"http://{self.db_ip}:{self.db_port}"},
             collection_name=self.db_collection_name,
             vector_field='position',
             text_field='caption',
+            primary_field='id',
         )
 
         self.time_vector_db = Milvus(
             self.embedder, # we will ignore this
-            connection_args={"host": self.db_ip, "port": self.db_port},
+            connection_args={"uri": f"http://{self.db_ip}:{self.db_port}"},
             collection_name=self.db_collection_name,
             vector_field='time',
             text_field='caption',
+            primary_field='id',
         )
 
 

@@ -16,7 +16,7 @@ from typing import (
     overload,
 )
 
-from langchain_community.chat_models.ollama import ChatOllama
+from pydantic import BaseModel
 from langchain_core.callbacks import CallbackManagerForLLMRun
 from langchain_core.language_models import LanguageModelInput
 from langchain_core.messages import AIMessage, BaseMessage, ToolCall
@@ -25,14 +25,10 @@ from langchain_core.output_parsers.json import JsonOutputParser
 from langchain_core.output_parsers.pydantic import PydanticOutputParser
 from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.prompts import SystemMessagePromptTemplate
-from langchain_core.pydantic_v1 import BaseModel
 from langchain_core.runnables import Runnable, RunnableLambda
 from langchain_core.runnables.base import RunnableMap
 from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools import BaseTool
-import langchain_openai
-
-# from langchain_core.language_models.llms import LLM
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.language_models import BaseLanguageModel
 
