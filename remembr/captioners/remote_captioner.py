@@ -69,25 +69,25 @@ class RemoteAPICaptioner(Captioner):
     This class intentionally has no dependency on llava/vila/torch/etc.
     """
 
-    def __init__(self, args):
-        self.args = args
-        self.api_base = args.api_base.rstrip("/")
-        self.model = args.model
+    def __init__(self):
+        self.api_base = "http://localhost:11434/v1"
+        self.model = "qwen2.5vl:7b"
+        self.api_key = ""
+        self.timeout = 120
+        self.temperature = 0.2
+        self.top_p = 0.9
+        self.max_new_tokens = 128
+        self.query = DEFAULT_QUERY
+        self.system_prompt = "You are a helpful vision assistant. Describe the image(s) clearly, factual, concise."
+
+        print("Use RemoteAPICaptioner:")
+        print("\tAPI base:", self.api_base)
+        print("\tModel:", self.model)
+
+        self.api_base = self.api_base.rstrip("/")
+
         # allow passing api_key via args or environment var
-        self.api_key = args.api_key or os.getenv("OPENAI_API_KEY", "")
-        self.timeout = getattr(args, "timeout", 120)
-
-        # Minimal defaults to mirror your previous CLI knobs
-        self.temperature = getattr(args, "temperature", 0.2)
-        self.top_p = getattr(args, "top_p", 0.9)
-        self.max_new_tokens = getattr(args, "max_new_tokens", 128)
-
-        # A safe default system prompt
-        self.system_prompt = getattr(
-            args,
-            "system_prompt",
-            "You are a helpful vision assistant. Describe the image(s) clearly, factual, concise."
-        )
+        self.api_key = self.api_key or os.getenv("OPENAI_API_KEY", "")
 
         # Optional: support placeholder replacement like <image> in text,
         # though OpenAI-style APIs don't require it. We simply ignore it.
@@ -102,7 +102,7 @@ class RemoteAPICaptioner(Captioner):
         image_contents = [{"type": "image_url", "image_url": {"url": _pil_to_data_url(img)}} for img in images]
 
         # Clean user query: remove legacy placeholders if present
-        user_text = self.image_placeholder_pattern.sub("", self.args.query or "").strip()
+        user_text = self.image_placeholder_pattern.sub("", self.query or "").strip()
         if not user_text:
             user_text = "Describe the image."
 
@@ -126,6 +126,7 @@ class RemoteAPICaptioner(Captioner):
         """
         Sends a single chat.completions request and returns the assistant content.
         """
+        print("Debug: Sending request to remote API...")
         url = f"{self.api_base}/chat/completions"
         payload = {
             "model": self.model,
@@ -146,33 +147,13 @@ class RemoteAPICaptioner(Captioner):
             # Provide debugging info without crashing the caller
             return f"[RemoteAPICaptioner] Unexpected response: {data}"
 
-
-def build_argparser():
-    p = argparse.ArgumentParser("Remote multimodal captioner (OpenAI/vLLM compatible)")
-    # parity with your original CLI where possible
-    p.add_argument("--image-file", type=str, required=False, default="", help="Single path or sep-joined list")
-    p.add_argument("--sep", type=str, default=",", help="Separator when passing multiple paths")
-    p.add_argument("--query", type=str, default=DEFAULT_QUERY)
-    p.add_argument("--temperature", type=float, default=0.2)
-    p.add_argument("--top_p", type=float, default=0.9)
-    p.add_argument("--max_new_tokens", type=int, default=128)
-
-    # New: remote API settings
-    p.add_argument("--api-base", dest="api_base", type=str, required=True, default="http://localhost:11434/v1",
-                   help="OpenAI-compatible API base, e.g. http://localhost:8000/v1")
-    p.add_argument("--model", type=str, required=True, help="Remote model name", default="qwen2.5vl:7b")
-    p.add_argument("--api-key", dest="api_key", type=str, default="", help="Bearer token (optional)")
-    p.add_argument("--system-prompt", dest="system_prompt", type=str, default="", help="System prompt (optional)")
-    p.add_argument("--timeout", type=int, default=120)
-
-    return p
-
-
 if __name__ == "__main__":
-    args = build_argparser().parse_args()
+    args = argparse.ArgumentParser("Remote multimodal captioner (OpenAI/vLLM compatible)")
+    args.add_argument("--image-file", type=str, required=False, default="", help="Single path or sep-joined list")
+    args.add_argument("--sep", type=str, default=",", help="Separator for multiple image paths")
+    args = args.parse_args() if isinstance(args, argparse.ArgumentParser) else args
+    cap = RemoteAPICaptioner()
     paths = image_parser(args) if args.image_file else []
     images = load_images(paths) if paths else []
-
-    cap = RemoteAPICaptioner(args)
     out = cap.caption(images)
     print(out)

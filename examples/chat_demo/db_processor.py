@@ -28,7 +28,6 @@ import pprint
 
 # from remembr.captioners.vila_captioner import VILACaptioner
 from remembr.captioners.remote_captioner import RemoteAPICaptioner
-from remembr.captioners.remote_captioner import build_argparser
 
 from remembr.memory.memory import MemoryItem
 from remembr.memory.milvus_memory import MilvusMemory
@@ -118,8 +117,9 @@ class ROSMemoryBuilder(Node):
         self.counter = 0
 
         # self.captioner = VILACaptioner(args)
-        self.captioner = RemoteAPICaptioner(build_argparser())
+        self.captioner = RemoteAPICaptioner()
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
+        print("Initialized ROSMemoryBuilder")
 
     def spin(self):
         print("STARTING SPIN")

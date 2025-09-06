@@ -67,7 +67,7 @@ class GradioDemo:
 
     def process_file(self, fileobj, upload_name, pos_topic, image_topic, db_uri):
         from chat_demo.db_processor import create_and_launch_memory_builder
-
+        print("Processing file", fileobj.name)
         self.db_dict['collection_name'] = upload_name
         self.db_dict['pos_topic'] = pos_topic
         self.db_dict['image_topic'] = image_topic
@@ -174,7 +174,7 @@ class GradioDemo:
                         with gr.Column(scale=1):
                             upload_name = gr.Textbox(label="Name of new DB collection")
                             pos_topic = gr.Textbox(label="Position Topic", value="/amcl_pose")
-                            image_topic = gr.Textbox(label="Image Topic", value="front_stereo_camera/left/image_raw")
+                            image_topic = gr.Textbox(label="Image Topic", value="/camera/color/image_raw")
 
                             file_upload = gr.File()
                             file_upload.upload(self.process_file, inputs=[file_upload, upload_name, pos_topic, image_topic, db_uri_box])    
