@@ -5,8 +5,10 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from std_msgs.msg import String
 from remembr.memory.milvus_memory import MilvusMemory
 from remembr.agents.remembr_agent import ReMEmbRAgent
-from scipy.spatial.transform import Rotation as R
+import traceback
 
+from scipy.spatial.transform import Rotation as R
+import numpy as np
 
 from common_utils import format_pose_msg
 
@@ -16,8 +18,8 @@ class AgentNode(Node):
     def __init__(self):
         super().__init__("AgentNode")
 
-        self.declare_parameter("llm_type", "command-r")
-        self.declare_parameter("db_collection", "test_collection")
+        self.declare_parameter("llm_type", "command-r7b")
+        self.declare_parameter("db_collection", "test03_gps_oss")
         self.declare_parameter("db_ip", "127.0.0.1")
         self.declare_parameter("query_topic", "/speech")
         self.declare_parameter("pose_topic", "/amcl_pose")
@@ -53,16 +55,17 @@ class AgentNode(Node):
         self.agent = ReMEmbRAgent(
             llm_type=self.get_parameter("llm_type").value
         )
-        self.agent.set_memory(memory)
+        self.agent.set_memory(self.memory)
 
         self.last_pose = None
         self.logger = self.get_logger()
         
 
     def query_callback(self, msg: String):
-        
+        print("Received query: " + msg.data)
+        start_time = self.get_clock().now()
         if not self.query_filter(msg.data):
-            logger.info("Skipping query {msg.data} because it does not have keyword")
+            self.logger.info("Skipping query {msg.data} because it does not have keyword")
             return 
 
         try:
@@ -75,10 +78,23 @@ class AgentNode(Node):
 
             # Run the Remembr Agent
             response = self.agent.query(query)
-            
+            if response is None:
+                self.logger.info("No response from agent")
+                return
+
             # Generate the goal pose from the response
             position = response.position
-            quat = R.from_euler('z', response.orientation).as_quat()
+            orientation = response.orientation
+
+            # Check position is a valid 3D coordinate
+            if len(position) != 3 or not all(isinstance(x, (int, float)) for x in position):
+                self.logger.info("Invalid position in response")
+                return
+            if len(orientation) != 1 or not isinstance(orientation[0], (int, float)):
+                self.logger.info("Invalid orientation in response, set to 0")
+                orientation = [0.0]
+
+            quat = R.from_euler('z', orientation).as_quat()
             quat = np.squeeze(quat)
             goal_pose = PoseStamped()
             goal_pose.header.frame_id = 'map'
@@ -92,10 +108,11 @@ class AgentNode(Node):
             goal_pose.pose.orientation.w = float(quat[3])
 
             # Publish the result
+            self.logger.info(f"Query took {(self.get_clock().now() - start_time).nanoseconds / 1e9:.2f} seconds")
             self.logger.info("Query executed: ")
             self.logger.info("\tText: " + response.text)
-            self.logger.info(f"\tPosition: {response.position}")
-            self.logger.info(f"\tOrientation: {response.orientation}")
+            self.logger.info(f"\tPosition: {position}")
+            self.logger.info(f"\tOrientation: {orientation}")
         
             self.goal_pose_publisher.publish(goal_pose)
         except:

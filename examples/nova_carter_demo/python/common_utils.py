@@ -1,3 +1,5 @@
+from geometry_msgs.msg import PoseWithCovarianceStamped
+
 def format_pose_msg(msg: PoseWithCovarianceStamped):
 
     position = np.array([

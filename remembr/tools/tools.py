@@ -1,5 +1,5 @@
 # Import things that are needed generically
-from langchain.pydantic_v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 from langchain.tools import BaseTool, StructuredTool, tool
 import numpy as np
 from time import strftime, localtime
@@ -56,7 +56,7 @@ def search_by_position(pos_db, ref_time, query: tuple) -> str:
     return docs
 
 def search_by_time(time_db, ref_time, hms_time: str) -> str:
-
+    print("Searching by time", hms_time)
     # Input is time like 08:20:30
     # need to convert to searchable time
     t = localtime(ref_time)
