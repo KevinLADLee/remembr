@@ -1,16 +1,8 @@
-from dataclasses import dataclass, asdict
-
-import datetime, time
 from time import strftime, localtime
-from typing import Any, Iterable, List, Optional, Tuple, Union
-from langchain_core.documents import Document
+
 import numpy as np
 
-
 from remembr.memory.memory import Memory, MemoryItem
-from remembr.captioners.captioner import Captioner
-
-from langchain_community.vectorstores import Milvus
 
 # Due to Milvus DB's vector quantization, must normalize all times
 FIXED_SUBTRACT=1721761000 # this is just a large value that brings us closed to 1970

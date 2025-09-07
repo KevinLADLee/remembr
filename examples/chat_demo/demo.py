@@ -56,7 +56,7 @@ class GradioDemo:
         ip = db_uri.split('://')[1].split(':')[0]
         memory = MilvusMemory(selection, db_ip=ip)
         self.agent.set_memory(memory)
-        print("Set ReMEmbR memory to", selection)
+        print("Set collection to", selection)
 
     def process_file(self, fileobj, upload_name, pos_topic, image_topic, db_uri):
         from chat_demo.db_processor import create_and_launch_memory_builder

@@ -18,12 +18,18 @@ class AgentNode(Node):
     def __init__(self):
         super().__init__("AgentNode")
 
-        self.declare_parameter("llm_type", "command-r7b")
-        self.declare_parameter("db_collection", "test03_gps_oss")
+
+        self.declare_parameter("llm_type", "gpt-4o")
+        self.declare_parameter("db_collection", "test0907")
         self.declare_parameter("db_ip", "127.0.0.1")
         self.declare_parameter("query_topic", "/speech")
         self.declare_parameter("pose_topic", "/amcl_pose")
         self.declare_parameter("goal_pose_topic", "/goal_pose")
+
+        self.logger = self.get_logger()
+        self.logger.info("LLM type: {}".format(self.get_parameter("llm_type").value))
+        self.logger.info("DB IP: {}".format(self.get_parameter("db_ip").value))
+        self.logger.info("DB Collection: {}".format(self.get_parameter("db_collection").value))
 
         # look for "robot" keyword
         self.query_filter = lambda text: "robot" in text.lower()
@@ -56,9 +62,9 @@ class AgentNode(Node):
             llm_type=self.get_parameter("llm_type").value
         )
         self.agent.set_memory(self.memory)
-
         self.last_pose = None
-        self.logger = self.get_logger()
+
+        self.logger.info("Agent init done")
         
 
     def query_callback(self, msg: String):
@@ -74,10 +80,11 @@ class AgentNode(Node):
             # Add additional context information to query
             if self.last_pose is not None:
                 position, angle, current_time = format_pose_msg(self.last_pose)
-                query +=  f"\nYou are currently located at {position} and the time is {self.current_time}."
+                query +=  f"\nYou are currently located at {position} and the time is {current_time}."
 
             # Run the Remembr Agent
             response = self.agent.query(query)
+            self.logger.info("Got response")
             if response is None:
                 self.logger.info("No response from agent")
                 return
@@ -116,8 +123,8 @@ class AgentNode(Node):
         
             self.goal_pose_publisher.publish(goal_pose)
         except:
-            print("FAILED. Returning")
-            print(traceback.format_exc())
+            print("Query failed, try to say it again")
+            # print(traceback.format_exc())
             return
 
     def pose_callback(self, msg: PoseWithCovarianceStamped):

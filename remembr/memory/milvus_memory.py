@@ -1,19 +1,17 @@
-from dataclasses import dataclass, asdict
-
 import asyncio
-import datetime, time
+import datetime
+import time
+from dataclasses import asdict
 from time import strftime, localtime
 from typing import Any, List, Optional, Tuple
-from langchain_core.documents import Document
+
 import numpy as np
-
-from remembr.memory.memory import Memory, MemoryItem
-
-from langchain_milvus import Milvus
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
-
+from langchain_milvus import Milvus
 from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
 
+from remembr.memory.memory import Memory, MemoryItem
 
 FIXED_SUBTRACT=1721761000 # this is just a large value that brings us close to 1970
 

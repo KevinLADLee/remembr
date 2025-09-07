@@ -1,13 +1,12 @@
 import json
-import numpy as np
-import sys, os
+import os
 import re
+import sys
 
 from langchain_community.chat_models import ChatOllama
 from langchain_core.prompts import PromptTemplate
 
 sys.path.append(sys.path[0] + '/..')
-from remembr.tools.tools import format_docs
 from remembr.utils.util import file_to_string
 
 from remembr.agents.agent import Agent, AgentOutput

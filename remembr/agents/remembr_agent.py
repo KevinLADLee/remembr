@@ -1,28 +1,23 @@
-from typing import Annotated, Literal, Sequence, TypedDict
+import os
+import re
+import sys
 import traceback
-import sys, re
+from typing import Annotated, Sequence, TypedDict
 
-from langchain_huggingface import HuggingFaceEmbeddings
-
-from langchain_openai import ChatOpenAI
-from langchain_community.chat_models import ChatOllama
-
-from langchain_core.prompts import PromptTemplate
 from langchain.prompts import (
     ChatPromptTemplate,
     MessagesPlaceholder
 )
-from langchain_core.messages import ToolMessage, AIMessage
-from langchain_core.messages import BaseMessage
-from langgraph.graph.message import add_messages
 from langchain_community.chat_message_histories import ChatMessageHistory
+from langchain_ollama import ChatOllama
+from langchain_core.messages import BaseMessage
+from langchain_core.messages import ToolMessage, AIMessage
+from langchain_core.prompts import PromptTemplate
 from langchain_core.utils.function_calling import convert_to_openai_function
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_openai import ChatOpenAI
+from langgraph.graph.message import add_messages
 
-from langchain.tools import StructuredTool
-from pydantic import BaseModel, Field
-
-
-import sys, os
 sys.path.append(sys.path[0] + '/..')
 
 
@@ -33,7 +28,7 @@ from remembr.tools.functions_wrapper import FunctionsWrapper
 from remembr.memory.memory import Memory
 
 from remembr.agents.agent import Agent, AgentOutput
-
+from remembr.memory.milvus_memory import MilvusMemory
 
 
 ### Print out state of the system
@@ -121,18 +116,26 @@ class ReMEmbRAgent(Agent):
     def llm_selector(self, llm_type, temperature, num_ctx):
         llm = None
         # Support for LLM Gateway
-        if 'gpt-5' or 'gpt-4o' in llm_type:
+        if llm_type == 'gpt-4o' or llm_type == 'gpt-5':
             base_url = os.getenv("OPENAI_BASE_URL", "https://api.chsdw.top/v1")
             llm = ChatOpenAI(
                 model=llm_type,
                 temperature=temperature,
                 base_url=base_url,
                 timeout=300,
-                max_retries=5
+                max_retries=5,
             )
-
+        elif llm_type == 'deepseek':
+            print("Use deepseek-r1 powered by siliconflow")
+            base_url = "https://api.siliconflow.cn/v1/"
+            llm = ChatOpenAI(model="deepseek-ai/DeepSeek-R1",
+                             api_key=os.getenv("OPENAI_API_KEY"),
+                             base_url=base_url,
+                             timeout=300,
+                             max_retries=1,
+                             )
         # Support for Ollama functions
-        elif llm_type == 'command-r':
+        elif llm_type == 'command-r' or llm_type == 'command-r7b':
             llm = ChatOllama(model=llm_type, temperature=temperature, num_ctx=num_ctx)
         else:
             llm = ChatOllama(model=llm_type, format="json", temperature=temperature, num_ctx=num_ctx)
@@ -394,6 +397,8 @@ class ReMEmbRAgent(Agent):
             ]
         }
 
+        # print("inputs", inputs)
+
         out = self.graph.invoke(inputs)
 
         # print("Raw output:")
@@ -412,17 +417,15 @@ class ReMEmbRAgent(Agent):
             parsed = parse_json(response)
 
         response = AgentOutput.from_dict(parsed)
-
+        print(response)
 
         return response
 
 if __name__ == "__main__":
 
-    from memory.milvus_memory import MilvusMemory
-
     # llm_name = 
     # Options: 'nim/meta/llama-3.1-405b-instruct', 'gpt-4o', or any Ollama LLMs (such as 'codestral')
-    memory = MilvusMemory("testollama0906", db_ip='127.0.0.1')
+    memory = MilvusMemory("test", db_ip='127.0.0.1', db_port=19530)
 
     llm_name = 'gpt-4o' 
     agent = ReMEmbRAgent(llm_type=llm_name)
@@ -433,4 +436,4 @@ if __name__ == "__main__":
     response = agent.query("Where can I sit?")
     print(response)
     response = agent.query_position("Where can I sit?")
-    print
+    print(response)

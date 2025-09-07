@@ -4,16 +4,15 @@
 
 import argparse
 import base64
-from io import BytesIO
 import os
-import os.path as osp
 import re
+from io import BytesIO
 from typing import List
 
 import requests
 from PIL import Image
-from remembr.captioners.captioner import Captioner
 
+from remembr.captioners.captioner import Captioner
 
 # DEFAULT_QUERY = (
 #     "<video> Please describe in detail what you see in the few seconds of the video. "
@@ -126,7 +125,7 @@ class RemoteAPICaptioner(Captioner):
         """
         Sends a single chat.completions request and returns the assistant content.
         """
-        print("Debug: Sending request to remote API...")
+        # print("[Debug]: Sending request to remote API...")
         url = f"{self.api_base}/chat/completions"
         payload = {
             "model": self.model,

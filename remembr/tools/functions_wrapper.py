@@ -1,4 +1,5 @@
 import json
+import time
 import uuid
 from operator import itemgetter
 from typing import (
@@ -31,7 +32,6 @@ from langchain_core.runnables.passthrough import RunnablePassthrough
 from langchain_core.tools import BaseTool
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.language_models import BaseLanguageModel
-
 
 
 DEFAULT_SYSTEM_TEMPLATE = """You have access to the following tools:
@@ -130,7 +130,6 @@ class FunctionsWrapper(BaseChatModel, BaseLanguageModel):
         #     self.use_gpt = True
 
         self.llm = llm
-
 
     def bind_tools(
         self,
@@ -320,8 +319,23 @@ class FunctionsWrapper(BaseChatModel, BaseLanguageModel):
             tools=json.dumps(functions, indent=2)
         )
 
-        response_message = self.llm.invoke([system_message] + messages)
+        final_input = [system_message] + messages
+        # output final_input to tmp folder
+        # with open(f'/tmp/tmpinput_{time.time()}.txt', 'w') as file:
+        #     file.write(str(final_input))
+
+        response_message = self.llm.invoke(final_input)
         chat_generation_content = response_message.content
+        # print("---------------")
+        #
+        # print("CONTENT:", repr(response_message.content))
+        # print("TOOL_CALLS:", getattr(response_message, "tool_calls", None))
+        # print("KWARGS:", getattr(response_message, "additional_kwargs", None))
+        # print("---------------")
+
+        # if chat_generation_content is {}, then raise error
+        if chat_generation_content == "":
+            raise ValueError("Chat generation content cannot be empty.")
 
         if not isinstance(chat_generation_content, str):
             raise ValueError("OllamaFunctions does not support non-string output.")
@@ -338,7 +352,6 @@ class FunctionsWrapper(BaseChatModel, BaseLanguageModel):
                 parsed_chat_result = json.loads(chat_generation_content)
 
         except json.JSONDecodeError:
-            # import pdb; pdb.set_trace()
             raise ValueError(
                 f"""Model did not respond with valid JSON. 
                 Please try again. 
