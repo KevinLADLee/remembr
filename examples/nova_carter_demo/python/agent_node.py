@@ -54,10 +54,13 @@ class AgentNode(Node):
             10
         )
 
+        self.logger.info("Memory DB initializing...")
         self.memory = MilvusMemory(
             self.get_parameter("db_collection").value,
             self.get_parameter("db_ip").value
         )
+        self.logger.info("Memory DB Init done!")
+
         self.agent = ReMEmbRAgent(
             llm_type=self.get_parameter("llm_type").value
         )

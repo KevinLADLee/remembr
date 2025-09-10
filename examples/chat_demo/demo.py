@@ -137,7 +137,7 @@ class GradioDemo:
             out_dict = eval(response_msg)
             response_text = out_dict["text"]
 
-            chat_history = history  [
+            chat_history = (history or []) + [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": response_text},
             ]
