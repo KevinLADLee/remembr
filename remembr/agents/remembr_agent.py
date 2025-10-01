@@ -15,6 +15,7 @@ from langchain_core.messages import ToolMessage, AIMessage
 from langchain_core.prompts import PromptTemplate
 from langchain_core.utils.function_calling import convert_to_openai_function
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_openai import ChatOpenAI
 from langgraph.graph.message import add_messages
 
@@ -100,6 +101,7 @@ class ReMEmbRAgent(Agent):
         self.llm_type = llm_type
         ### Load vectorstore
         self.embeddings = HuggingFaceEmbeddings(model_name='mixedbread-ai/mxbai-embed-large-v1')
+        # self.embeddings = OllamaEmbeddings(model='qwen3-embedding:0.6b', base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 
         # self.update_for_instance() # ref_time is None this time
         top_level_path = str(os.path.dirname(__file__)) + '/../'
@@ -124,6 +126,16 @@ class ReMEmbRAgent(Agent):
                 base_url=base_url,
                 timeout=300,
                 max_retries=5,
+            )
+        elif llm_type.startswith('qwen'):
+            llm = ChatOpenAI(
+                model=llm_type,
+                temperature=temperature,
+                base_url=os.getenv("OPENAI_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1"),
+                api_key=os.getenv("OPENAI_API_KEY"),
+                timeout=300,
+                max_retries=5,
+                extra_body={"enable_thinking": False}
             )
         elif llm_type == 'deepseek':
             print("Use deepseek-r1 powered by siliconflow")
@@ -251,10 +263,10 @@ class ReMEmbRAgent(Agent):
         question = f"The question is: {messages[0]}"
 
         # Convert all ToolMessages into AI Messages since Ollama cann't handle ToolMessage
-        if ('gpt-4' not in self.llm_type) and ('nim' not in self.llm_type):
-            for i in range(len(messages)):
-                if type(messages[i]) == ToolMessage:
-                    messages[i] = AIMessage(id=messages[i].id, content=messages[i].content) # ignore tool_call_id
+        # if ('gpt-4' not in self.llm_type) and ('nim' not in self.llm_type):
+        #     for i in range(len(messages)):
+        #         if type(messages[i]) == ToolMessage:
+        #             messages[i] = AIMessage(id=messages[i].id, content=messages[i].content) # ignore tool_call_id
 
 
         response = model.invoke({"question": question, "chat_history": messages[:]})

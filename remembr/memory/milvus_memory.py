@@ -1,5 +1,6 @@
 import asyncio
 import datetime
+import os
 import time
 from dataclasses import asdict
 from time import strftime, localtime
@@ -8,6 +9,7 @@ from typing import Any, List, Optional, Tuple
 import numpy as np
 from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_ollama import OllamaEmbeddings
 from langchain_milvus import Milvus
 from pymilvus import connections, FieldSchema, CollectionSchema, DataType, Collection, utility
 
@@ -121,6 +123,7 @@ class MilvusMemory(Memory):
         self.time_offset = time_offset
 
         self.embedder = HuggingFaceEmbeddings(model_name='mixedbread-ai/mxbai-embed-large-v1')
+        # self.embedder = OllamaEmbeddings(model='qwen3-embedding:0.6b', base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"))
 
         self.working_memory = []
 
