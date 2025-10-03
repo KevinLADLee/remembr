@@ -39,6 +39,7 @@ class GradioDemo:
             rclpy.init()
 
         self.rosbag_enabled = args.rosbag_enabled
+        self.raw_dataset_enabled = not args.rosbag_enabled
         self.agent = ReMEmbRAgent(llm_type=args.llm_backend)
         self.db_dict = {}
 
@@ -58,8 +59,25 @@ class GradioDemo:
         self.agent.set_memory(memory)
         print("Set collection to", selection)
 
+    def process_raw_dataset(self, dataset_path, upload_name, db_uri):
+        print("Processing raw dataset", dataset_path)
+        from raw_db_processor import RawDbMemoryBuilder
+        self.db_dict['collection_name'] = upload_name
+        self.db_dict['db_ip'] = db_uri.split('://')[1].split(':')[0]
+        self.db_dict['dataset_path'] = dataset_path
+        print("launching threading")
+        mem_builder = RawDbMemoryBuilder(
+            self.db_dict['dataset_path'],
+            collection_name=self.db_dict['collection_name'],
+            db_ip=self.db_dict['db_ip']
+        )
+        mem_builder.run()
+        print("Done processing raw dataset")
+
+
+
     def process_file(self, fileobj, upload_name, pos_topic, image_topic, db_uri):
-        from chat_demo.db_processor import create_and_launch_memory_builder
+        from examples.chat_demo.ros2_db_processor import create_and_launch_memory_builder
         print("Processing file", fileobj.name)
         self.db_dict['collection_name'] = upload_name
         self.db_dict['pos_topic'] = pos_topic
@@ -192,6 +210,36 @@ class GradioDemo:
                             inputs=[file_upload, upload_name, pos_topic, image_topic, db_uri_box],
                             outputs=[]
                         )
+            elif self.raw_dataset_enabled:
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        upload_name = gr.Textbox(label="Name of new DB collection")
+                        # pos_topic = gr.Textbox(label="Position Topic", value="/amcl_pose")
+                        # image_topic = gr.Textbox(label="Image Topic", value="/camera/color/image_raw")
+                        dataset_path = gr.Textbox(label="Raw Dataset Folder Path")
+                        submit_btn = gr.Button("Process Raw Dataset", interactive=False)
+                        
+                        def update_submit_state(*inputs):
+                            # Check if all required fields are filled
+                            all_filled = all(inp and inp.strip() for inp in inputs)
+                            return gr.update(interactive=all_filled)
+                        
+                        # Update submit button state when any textbox changes
+                        for textbox in [upload_name, dataset_path]:
+                            textbox.change(
+                                update_submit_state,
+                                inputs=[upload_name, dataset_path],
+                                outputs=[submit_btn]
+                            )
+                        
+                        submit_btn.click(
+                            self.process_raw_dataset,
+                            inputs=[dataset_path, upload_name, db_uri_box],
+                            outputs=[]
+                        )
+            else :
+                gr.Markdown("**ROS2 is not enabled, file upload disabled.**")
+
 
         # v4：不传参最稳，默认就启用队列与并发控制
         demo.queue()
@@ -204,7 +252,6 @@ if __name__ == '__main__':
     parser.add_argument("--db_uri", type=str, default="http://127.0.0.1:19530")
     parser.add_argument("--chatbot_host_ip", type=str, default="localhost")
     parser.add_argument("--chatbot_host_port", type=int, default=7860)
-    # Options: 'nim/meta/llama-3.1-405b-instruct', 'gpt-4o', or any Ollama LLMs
     parser.add_argument("--llm_backend", type=str, default='codestral')
     parser.add_argument("--rosbag_enabled", action='store_true')
 

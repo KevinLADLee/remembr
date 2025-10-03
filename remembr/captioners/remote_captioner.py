@@ -68,11 +68,11 @@ class RemoteAPICaptioner(Captioner):
     This class intentionally has no dependency on llava/vila/torch/etc.
     """
 
-    def __init__(self):
-        self.api_base = "http://localhost:11434/v1"
-        self.model = "qwen2.5vl:7b"
+    def __init__(self, api_base="http://localhost:11434/v1", model_type="qwen2.5vl:7b", args=None):
+        self.api_base = api_base
+        self.model = model_type
         self.api_key = ""
-        self.timeout = 120
+        self.timeout = 600
         self.temperature = 0.2
         self.top_p = 0.9
         self.max_new_tokens = 128
@@ -103,7 +103,7 @@ class RemoteAPICaptioner(Captioner):
         # Clean user query: remove legacy placeholders if present
         user_text = self.image_placeholder_pattern.sub("", self.query or "").strip()
         if not user_text:
-            user_text = "Describe the image."
+            user_text = "Please describe what you see in the few seconds of the video. Especially focus on objects, like trash can, fire hydrant, etc."
 
         user_content = [{"type": "text", "text": user_text}] + image_contents
 
