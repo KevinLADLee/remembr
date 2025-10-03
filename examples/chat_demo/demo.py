@@ -7,6 +7,8 @@ from pymilvus import MilvusClient
 import subprocess
 import threading
 from typing import List
+import re
+import math
 
 from remembr.memory.milvus_memory import MilvusMemory, ensure_event_loop
 from remembr.agents.remembr_agent import ReMEmbRAgent
@@ -34,16 +36,32 @@ class GradioDemo:
     def __init__(self, args=None):
         self.args = args
 
-        if args.rosbag_enabled:
+        if args.rosbag_enabled or args.enable_ros2_nav:
             import rclpy
             rclpy.init()
 
         self.rosbag_enabled = args.rosbag_enabled
         self.raw_dataset_enabled = not args.rosbag_enabled
+        self.enable_ros2_nav = args.enable_ros2_nav
         self.agent = ReMEmbRAgent(llm_type=args.llm_backend)
         self.db_dict = {}
 
+        # Initialize Nav2 simple agent node if enabled
+        self.nav_agent = None
+        if args.enable_ros2_nav:
+            self._init_nav_agent()
+
         self.launch_demo()
+
+    def _init_nav_agent(self):
+        """Initialize the Nav2 simple agent node"""
+        try:
+            from simple_agent_node import SimpleAgentNode
+            self.nav_agent = SimpleAgentNode()
+            print("Nav2 Simple Agent Node initialized")
+        except Exception as e:
+            print(f"Failed to initialize Nav2 agent: {e}")
+            self.nav_agent = None
 
     # --- helpers ----------------------------------------------------
     def _list_collections(self, db_uri: str) -> List[str]:
@@ -155,6 +173,14 @@ class GradioDemo:
             out_dict = eval(response_msg)
             response_text = out_dict["text"]
 
+            # Send navigation goal if coordinates are detected and nav is enabled
+            if self.enable_ros2_nav and self.nav_agent:
+                import threading
+                def send_nav_goal():
+                    self.nav_agent.parse_and_send_goal(response_text)
+                nav_thread = threading.Thread(target=send_nav_goal, daemon=True)
+                nav_thread.start()
+
             chat_history = (history or []) + [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": response_text},
@@ -254,6 +280,7 @@ if __name__ == '__main__':
     parser.add_argument("--chatbot_host_port", type=int, default=7860)
     parser.add_argument("--llm_backend", type=str, default='codestral')
     parser.add_argument("--rosbag_enabled", action='store_true')
+    parser.add_argument("--enable_ros2_nav", action='store_true', help='Enable ROS2 Nav2 navigation goal sending')
 
     args = parser.parse_args()
     demo = GradioDemo(args)

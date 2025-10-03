@@ -71,7 +71,12 @@ class RemoteAPICaptioner(Captioner):
     def __init__(self, api_base="http://localhost:11434/v1", model_type="qwen2.5vl:7b", args=None):
         self.api_base = api_base
         self.model = model_type
-        self.api_key = ""
+
+        # TODO
+        self.api_base = "https://api.siliconflow.cn/v1/"
+        self.model = "Pro/Qwen/Qwen2.5-VL-7B-Instruct"
+        
+        self.api_key = os.getenv("OPENAI_API_KEY", "")
         self.timeout = 600
         self.temperature = 0.2
         self.top_p = 0.9
@@ -103,7 +108,7 @@ class RemoteAPICaptioner(Captioner):
         # Clean user query: remove legacy placeholders if present
         user_text = self.image_placeholder_pattern.sub("", self.query or "").strip()
         if not user_text:
-            user_text = "Please describe what you see in the few seconds of the video. Especially focus on objects, like trash can, fire hydrant, etc."
+            user_text = "Please describe what you see in the few seconds of the video. Especially focus on objects and their attributes, like trash can in black, fire hydrant, etc."
 
         user_content = [{"type": "text", "text": user_text}] + image_contents
 
