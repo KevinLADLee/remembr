@@ -45,6 +45,7 @@ class GradioDemo:
         self.db_dict: Dict[str, Any] = {}
         self.nav_agent = None
         self.collection_is_set = False
+        self.last_goal_pose = None  # Store last parsed goal pose
 
         # Initialize ROS2 if needed
         if args.rosbag_enabled or args.enable_ros2_nav:
@@ -258,13 +259,32 @@ class GradioDemo:
                     log_lines.append("\n")
             yield output, "\n".join(log_lines)
 
-    def _send_nav_goal_async(self, response_text: str):
-        """Send navigation goal in background thread if nav is enabled."""
+    def _extract_goal_pose(self, response_text: str):
+        """Extract goal pose [x, y, yaw] from response text."""
+        import re
+        pattern = r'\[\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\]'
+        match = re.search(pattern, response_text)
+
+        if match:
+            x = float(match.group(1))
+            y = float(match.group(2))
+            yaw = float(match.group(3))
+            return {"x": x, "y": y, "yaw": yaw}
+        return None
+
+    def _send_nav_goal(self, x: float, y: float, yaw: float):
+        """Send navigation goal if nav is enabled."""
         if self.enable_ros2_nav and self.nav_agent:
             def send_goal():
-                self.nav_agent.parse_and_send_goal(response_text)
+                self.nav_agent.send_goal(x, y, yaw)
             nav_thread = threading.Thread(target=send_goal, daemon=True)
             nav_thread.start()
+
+    def _send_nav_goal_async(self, response_text: str):
+        """Send navigation goal in background thread if nav is enabled."""
+        goal_pose = self._extract_goal_pose(response_text)
+        if goal_pose:
+            self._send_nav_goal(goal_pose["x"], goal_pose["y"], goal_pose["yaw"])
 
     def _create_chat_handler(self):
         """Create the chat message handler function."""
@@ -276,7 +296,7 @@ class GradioDemo:
                 history: Chat history as list of dicts with 'role' and 'content'
                 log_text: Current log text
             Yields:
-                Tuple of (input_box, updated_history, updated_log)
+                Tuple of (input_box, updated_history, updated_log, goal_pose_text)
             """
             history = history or []
 
@@ -285,7 +305,7 @@ class GradioDemo:
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": "..."},
             ]
-            yield "", temp_history, ""
+            yield "", temp_history, "", ""
 
             # Process through agent
             final_output = None
@@ -293,22 +313,28 @@ class GradioDemo:
             for output, log in self._process_agent_stream(user_message):
                 final_output = output
                 final_log = log
-                yield "", temp_history, log
+                yield "", temp_history, log, ""
 
             # Extract final response
             response_msg = final_output["generate"]["messages"][-1]
             out_dict = eval(response_msg)
             response_text = out_dict["text"]
 
-            # Send navigation goal if enabled
-            self._send_nav_goal_async(response_text)
+            # Extract and store goal pose
+            goal_pose = self._extract_goal_pose(response_text)
+            goal_text = ""
+            if goal_pose:
+                self.last_goal_pose = goal_pose
+                goal_text = f"x: {goal_pose['x']:.2f}\ny: {goal_pose['y']:.2f}\nyaw: {goal_pose['yaw']:.2f}"
+                # Send navigation goal if enabled
+                self._send_nav_goal_async(response_text)
 
             # Update chat history with final response
             chat_history = history + [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": response_text},
             ]
-            yield "", chat_history, final_log
+            yield "", chat_history, final_log, goal_text
 
         return chatter
 
@@ -320,7 +346,7 @@ class GradioDemo:
 
         with gr.Blocks() as demo:
             # Build chat section and get components
-            chatbot, msg, output_log, db_uri_box, selector = self._build_chat_section(chatter)
+            chatbot, msg, output_log, db_uri_box, selector, goal_pose_box, send_goal_btn = self._build_chat_section(chatter)
 
             # Build upload section with db_uri_box reference
             self._build_upload_section(db_uri_box)
@@ -356,9 +382,24 @@ class GradioDemo:
                     refresh = gr.Button("Refresh Collections")
                     set_btn = gr.Button("Set Collection")
 
+                # Navigation goal widget (only show if ROS2 nav is enabled)
+                if self.enable_ros2_nav:
+                    gr.Markdown("### Navigation Goal")
+                    goal_pose_box = gr.Textbox(
+                        label="Goal Pose",
+                        value="",
+                        lines=3,
+                        interactive=False,
+                        placeholder="No goal detected"
+                    )
+                    send_goal_btn = gr.Button("Send Goal", variant="primary", interactive=False)
+                else:
+                    goal_pose_box = gr.Textbox(visible=False)
+                    send_goal_btn = gr.Button(visible=False)
+
         # Event handlers
-        msg.submit(chatter, [msg, chatbot, output_log], [msg, chatbot, output_log])
-        clear.click(lambda: ([], "", ""), outputs=[chatbot, msg, output_log])
+        msg.submit(chatter, [msg, chatbot, output_log], [msg, chatbot, output_log, goal_pose_box])
+        clear.click(lambda: ([], "", "", ""), outputs=[chatbot, msg, output_log, goal_pose_box])
 
         # Collection management
         def update_collections(db_uri):
@@ -379,7 +420,27 @@ class GradioDemo:
             outputs=[msg]
         )
 
-        return chatbot, msg, output_log, db_uri_box, selector
+        # Navigation goal sending
+        if self.enable_ros2_nav:
+            def send_goal_manual():
+                """Send the last stored goal pose."""
+                if self.last_goal_pose:
+                    self._send_nav_goal(
+                        self.last_goal_pose["x"],
+                        self.last_goal_pose["y"],
+                        self.last_goal_pose["yaw"]
+                    )
+
+            # Enable send button when goal is detected
+            def update_send_button(goal_text):
+                if goal_text:
+                    return gr.update(interactive=True)
+                return gr.update(interactive=False)
+
+            goal_pose_box.change(update_send_button, inputs=[goal_pose_box], outputs=[send_goal_btn])
+            send_goal_btn.click(send_goal_manual)
+
+        return chatbot, msg, output_log, db_uri_box, selector, goal_pose_box, send_goal_btn
 
     def _build_upload_section(self, db_uri_box):
         """Build the dataset upload section based on enabled mode."""
