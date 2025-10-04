@@ -20,8 +20,12 @@ from remembr.captioners.captioner import Captioner
 #     "and other interesting details. Think step by step about these details and be very specific."
 # )
 
-DEFAULT_QUERY = ("Please describe what you see in the few seconds of the video.")
-
+DEFAULT_PROMPT = (
+    "Briefly describe the objects appearing in the video and their most prominent features, "+ \
+    "such as a black trash can, a fire hydrant, lift door and etc. Specifically focus on the objects, environmental " + \
+        "features, events/activities, and other interesting details." + \
+    "Also briefly describe the entire scene. Keep the entire description as concise as possible."
+)
 
 def image_parser(args):
     # keep original CLI behavior from your file
@@ -81,7 +85,7 @@ class RemoteAPICaptioner(Captioner):
         self.temperature = 0.2
         self.top_p = 0.9
         self.max_new_tokens = 128
-        self.query = DEFAULT_QUERY
+        self.query = DEFAULT_PROMPT
         self.system_prompt = "You are a helpful vision assistant. Describe the image(s) clearly, factual, concise."
 
         print("Use RemoteAPICaptioner:")

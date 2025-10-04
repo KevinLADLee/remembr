@@ -14,8 +14,9 @@ from remembr.captioners.captioner import Captioner
 
 
 DEFAULT_PROMPT = (
-    "Briefly describe the objects appearing in the video and their most prominent features, "
-    "such as a black trash can, a fire hydrant, etc. "
+    "Briefly describe the objects appearing in the video and their most prominent features, "+ \
+    "such as a black trash can, a fire hydrant, lift door and etc. Specifically focus on the objects, environmental " + \
+        "features, events/activities, and other interesting details." + \
     "Also briefly describe the entire scene. Keep the entire description as concise as possible."
 )
 
@@ -43,7 +44,7 @@ class QwenVLCaptioner(Captioner):
         model_type: str = DEFAULT_MODEL,
         device: str = "cuda",
         query: str = DEFAULT_PROMPT,
-        max_new_tokens: int = 128,
+        max_new_tokens: int = 256,
         temperature: float = 0.2,
         top_p: float = 0.9,
     ):
@@ -60,6 +61,7 @@ class QwenVLCaptioner(Captioner):
         print("Use QwenVLCaptioner (local):")
         print(f"\tModel: {self.model_type}")
         print(f"\tDevice: {self.device}")
+        print(f"\tDefault prompt: {self.query}")
 
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             self.model_type, torch_dtype="auto"
@@ -69,8 +71,6 @@ class QwenVLCaptioner(Captioner):
 
         # Register cleanup handlers
         atexit.register(self.cleanup)
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
 
     def _signal_handler(self, signum, frame):
         """Handle interrupt signals (Ctrl+C) gracefully."""

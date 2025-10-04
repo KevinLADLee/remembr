@@ -272,19 +272,6 @@ class GradioDemo:
             return {"x": x, "y": y, "yaw": yaw}
         return None
 
-    def _send_nav_goal(self, x: float, y: float, yaw: float):
-        """Send navigation goal if nav is enabled."""
-        if self.enable_ros2_nav and self.nav_agent:
-            def send_goal():
-                self.nav_agent.send_goal(x, y, yaw)
-            nav_thread = threading.Thread(target=send_goal, daemon=True)
-            nav_thread.start()
-
-    def _send_nav_goal_async(self, response_text: str):
-        """Send navigation goal in background thread if nav is enabled."""
-        goal_pose = self._extract_goal_pose(response_text)
-        if goal_pose:
-            self._send_nav_goal(goal_pose["x"], goal_pose["y"], goal_pose["yaw"])
 
     def _create_chat_handler(self):
         """Create the chat message handler function."""
@@ -326,8 +313,6 @@ class GradioDemo:
             if goal_pose:
                 self.last_goal_pose = goal_pose
                 goal_text = f"x: {goal_pose['x']:.2f}\ny: {goal_pose['y']:.2f}\nyaw: {goal_pose['yaw']:.2f}"
-                # Send navigation goal if enabled
-                self._send_nav_goal_async(response_text)
 
             # Update chat history with final response
             chat_history = history + [
@@ -425,12 +410,10 @@ class GradioDemo:
             def send_goal_manual():
                 """Send the last stored goal pose."""
                 if self.last_goal_pose:
-                    self._send_nav_goal(
-                        self.last_goal_pose["x"],
+                    self.nav_agent.send_goal(self.last_goal_pose["x"],
                         self.last_goal_pose["y"],
                         self.last_goal_pose["yaw"]
                     )
-
             # Enable send button when goal is detected
             def update_send_button(goal_text):
                 if goal_text:

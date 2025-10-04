@@ -1,4 +1,5 @@
 from remembr.captioners.remote_captioner import RemoteAPICaptioner
+
 from remembr.memory.memory import MemoryItem
 from remembr.memory.milvus_memory import MilvusMemory
 from PIL import Image as im
@@ -19,7 +20,14 @@ class RawDbMemoryBuilder:
 
         self.caption_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
-        self.captioner = RemoteAPICaptioner(api_base=api_base, model_type=caption_llm_type)
+
+        self.enable_local_captioner = False
+        if self.enable_local_captioner:
+            from remembr.captioners.qwen_captioner import QwenVLCaptioner
+            self.captioner = QwenVLCaptioner()
+        else:
+            self.captioner = RemoteAPICaptioner(api_base=api_base, model_type=caption_llm_type)
+        
         print("Initialized RawDbMemoryBuilder")
 
 
@@ -154,7 +162,7 @@ class RawDbMemoryBuilder:
         if len(poses_data) > 0:
             avg_x = sum(p['x'] for p in poses_data) / len(poses_data)
             avg_y = sum(p['y'] for p in poses_data) / len(poses_data)
-            avg_z = sum(p['z'] for p in poses_data) / len(poses_data)
+            # avg_z = sum(p['z'] for p in poses_data) / len(poses_data)
             avg_yaw = sum(p['yaw'] for p in poses_data) / len(poses_data)
         else:
             # No pose data for this segment, skip
@@ -185,7 +193,7 @@ class RawDbMemoryBuilder:
 
         # Create and insert memory item
         entity = MemoryItem(
-            position=[avg_x, avg_y, avg_z],
+            position=[avg_x, avg_y, avg_yaw],
             theta=avg_yaw,
             time=mid_time,
             caption=caption_text
@@ -199,8 +207,8 @@ class RawDbMemoryBuilder:
             time_struct = time.localtime(mid_time)
             time_str = time.strftime("%Y%m%d_%H%M%S", time_struct)
             with log_file.open("a") as f:
-                f.write(f"{time_str} - Inserted at position ({avg_x:.2f}, {avg_y:.2f}, {avg_z:.2f})\n")
+                f.write(f"{time_str} - Inserted at position ({avg_x:.2f}, {avg_y:.2f}, {avg_yaw:.2f})\n")
                 f.write(f"Caption: {caption_text}\n")
 
         self.memory.insert(entity)
-        print(f"Inserted at position ({avg_x:.2f}, {avg_y:.2f}, {avg_z:.2f})\n")
+        print(f"Inserted at position ({avg_x:.2f}, {avg_y:.2f}, {avg_yaw:.2f})\n")
