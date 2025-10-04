@@ -18,6 +18,7 @@ import time
 import pprint
 
 from remembr.captioners.remote_captioner import RemoteAPICaptioner
+from remembr.captioners.qwen_captioner import QwenVLCaptioner
 
 from remembr.memory.memory import MemoryItem
 from remembr.memory.milvus_memory import MilvusMemory
@@ -194,7 +195,9 @@ class ROSMemoryBuilder(Node):
 
         self.counter = 0
 
-        self.captioner = RemoteAPICaptioner()
+        # self.captioner = RemoteAPICaptioner()
+        self.captioner = QwenVLCaptioner()
+
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
         print("Initialized ROSMemoryBuilder")
 

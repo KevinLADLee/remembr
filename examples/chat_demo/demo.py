@@ -93,6 +93,33 @@ class GradioDemo:
         """Extract IP address from database URI."""
         return db_uri.split('://')[1].split(':')[0]
 
+    def _validate_collection_name(self, collection_name: str) -> tuple[bool, str]:
+        """
+        Validate collection name according to MilvusDB requirements.
+
+        Rules:
+        - Can only contain numbers, letters, and underscores
+        - Must start with a letter or underscore
+        - Cannot be empty
+
+        Returns:
+            (is_valid, error_message) tuple
+        """
+        if not collection_name or not collection_name.strip():
+            return False, "Collection name is required"
+
+        collection_name = collection_name.strip()
+
+        # Check first character (must be letter or underscore)
+        if not (collection_name[0].isalpha() or collection_name[0] == '_'):
+            return False, "Collection name must start with a letter or underscore"
+
+        # Check all characters (must be alphanumeric or underscore)
+        if not all(c.isalnum() or c == '_' for c in collection_name):
+            return False, "Collection name can only contain letters, numbers, and underscores"
+
+        return True, ""
+
     # === Dataset Processing ===
 
     def process_raw_dataset(self, dataset_path: str, collection_name: str, db_uri: str):
@@ -101,7 +128,13 @@ class GradioDemo:
 
         print(f"Processing raw dataset: {dataset_path}")
 
-        self.db_dict['collection_name'] = collection_name
+        # Validate collection name
+        is_valid, error_msg = self._validate_collection_name(collection_name)
+        if not is_valid:
+            print(f"Error: {error_msg}")
+            raise gr.Error(error_msg)
+
+        self.db_dict['collection_name'] = collection_name.strip()
         self.db_dict['db_ip'] = self._extract_db_ip(db_uri)
         self.db_dict['dataset_path'] = dataset_path
 
@@ -121,9 +154,9 @@ class GradioDemo:
         print(f"Processing ROS2 bag file: {fileobj.name}")
 
         # Validate collection name
-        if not collection_name or not collection_name.strip():
-            error_msg = "Error: Collection name is required"
-            print(error_msg)
+        is_valid, error_msg = self._validate_collection_name(collection_name)
+        if not is_valid:
+            print(f"Error: {error_msg}")
             raise gr.Error(error_msg)
 
         # Validate topics in bag file
@@ -138,7 +171,7 @@ class GradioDemo:
 
         print(f"Topic validation passed: {message}")
 
-        self.db_dict['collection_name'] = collection_name
+        self.db_dict['collection_name'] = collection_name.strip()
         self.db_dict['pos_topic'] = pos_topic
         self.db_dict['image_topic'] = image_topic
         self.db_dict['db_ip'] = self._extract_db_ip(db_uri)
@@ -377,7 +410,11 @@ class GradioDemo:
 
                 # Configuration section (initially hidden)
                 with gr.Group(visible=False) as config_group:
-                    upload_name = gr.Textbox(label="Name of new DB collection")
+                    upload_name = gr.Textbox(
+                        label="Name of new DB collection",
+                        info="Must start with letter/underscore, contain only letters, numbers, and underscores"
+                    )
+                    name_validation = gr.Markdown("", visible=False)
                     start_btn = gr.Button("Start Processing", variant="primary", interactive=False)
 
                 # Upload triggers topic parsing
@@ -387,15 +424,23 @@ class GradioDemo:
                     outputs=[pos_topic, image_topic, config_group]
                 )
 
-                # Enable start button when collection name is filled
-                def enable_start(collection_name):
-                    is_filled = collection_name and collection_name.strip()
-                    return gr.update(interactive=is_filled)
+                # Enable start button when collection name is valid
+                def validate_and_enable(collection_name):
+                    is_valid, error_msg = self._validate_collection_name(collection_name)
+                    if not collection_name or not collection_name.strip():
+                        return gr.update(interactive=False), gr.update(visible=False)
+                    elif is_valid:
+                        return gr.update(interactive=True), gr.update(visible=False)
+                    else:
+                        return (
+                            gr.update(interactive=False),
+                            gr.update(value=f"❌ {error_msg}", visible=True)
+                        )
 
                 upload_name.change(
-                    enable_start,
+                    validate_and_enable,
                     inputs=[upload_name],
-                    outputs=[start_btn]
+                    outputs=[start_btn, name_validation]
                 )
 
                 # Start processing
@@ -409,21 +454,40 @@ class GradioDemo:
         """Build raw dataset upload interface."""
         with gr.Row():
             with gr.Column(scale=1):
-                upload_name = gr.Textbox(label="Name of new DB collection")
+                upload_name = gr.Textbox(
+                    label="Name of new DB collection",
+                    info="Must start with letter/underscore, contain only letters, numbers, and underscores"
+                )
+                name_validation = gr.Markdown("", visible=False)
                 dataset_path = gr.Textbox(label="Raw Dataset Folder Path")
                 submit_btn = gr.Button("Process Raw Dataset", interactive=False)
 
-                def update_submit_state(*inputs):
-                    """Enable submit button only when all fields are filled."""
-                    all_filled = all(inp and inp.strip() for inp in inputs)
-                    return gr.update(interactive=all_filled)
+                def update_submit_state(collection_name, dataset_path):
+                    """Enable submit button only when all fields are valid."""
+                    # Check if dataset path is filled
+                    path_filled = dataset_path and dataset_path.strip()
+
+                    # Validate collection name
+                    is_valid, error_msg = self._validate_collection_name(collection_name)
+
+                    if not collection_name or not collection_name.strip():
+                        return gr.update(interactive=False), gr.update(visible=False)
+                    elif not is_valid:
+                        return (
+                            gr.update(interactive=False),
+                            gr.update(value=f"❌ {error_msg}", visible=True)
+                        )
+                    elif is_valid and path_filled:
+                        return gr.update(interactive=True), gr.update(visible=False)
+                    else:
+                        return gr.update(interactive=False), gr.update(visible=False)
 
                 # Update submit button state on text changes
                 for textbox in [upload_name, dataset_path]:
                     textbox.change(
                         update_submit_state,
                         inputs=[upload_name, dataset_path],
-                        outputs=[submit_btn]
+                        outputs=[submit_btn, name_validation]
                     )
 
                 submit_btn.click(
