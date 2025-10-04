@@ -72,9 +72,9 @@ class RemoteAPICaptioner(Captioner):
         self.api_base = api_base
         self.model = model_type
 
-        # TODO
-        self.api_base = "https://api.siliconflow.cn/v1/"
-        self.model = "Pro/Qwen/Qwen2.5-VL-7B-Instruct"
+        # # TODO
+        # self.api_base = "https://api.siliconflow.cn/v1/"
+        # self.model = "Pro/Qwen/Qwen2.5-VL-7B-Instruct"
         
         self.api_key = os.getenv("OPENAI_API_KEY", "")
         self.timeout = 600
