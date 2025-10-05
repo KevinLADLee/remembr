@@ -558,7 +558,7 @@ def parse_arguments():
     parser.add_argument(
         "--chatbot_host_ip",
         type=str,
-        default="localhost",
+        default="0.0.0.0",
         help="Host IP for Gradio server"
     )
     parser.add_argument(
@@ -570,8 +570,8 @@ def parse_arguments():
     parser.add_argument(
         "--llm_backend",
         type=str,
-        default='codestral',
-        help="LLM backend to use"
+        default='qwen3-235b-a22b',
+        help="LLM backend to use, e.g., 'qwen3-235b-a22b', 'gpt-4o'"
     )
     parser.add_argument(
         "--rosbag_enabled",

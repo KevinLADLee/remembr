@@ -12,7 +12,7 @@ import numpy as np
 
 
 class RawDbMemoryBuilder:
-    def __init__(self, dataset_path, db_ip, collection_name, api_base="http://localhost:11434/v1", caption_llm_type="qwen2.5vl:7b"):
+    def __init__(self, dataset_path, db_ip, collection_name, api_base="http://localhost:11434/v1", caption_llm_type="qwen2.5vl:7b", enable_local_captioner=False):
         self.dataset_path = dataset_path
         self.db_ip = db_ip
         self.collection_name = collection_name
@@ -21,8 +21,7 @@ class RawDbMemoryBuilder:
         self.caption_executor = concurrent.futures.ThreadPoolExecutor(max_workers=3)
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
 
-        self.enable_local_captioner = False
-        if self.enable_local_captioner:
+        if enable_local_captioner:
             from remembr.captioners.qwen_captioner import QwenVLCaptioner
             self.captioner = QwenVLCaptioner()
         else:
