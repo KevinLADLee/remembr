@@ -20,8 +20,12 @@ from remembr.captioners.captioner import Captioner
 #     "and other interesting details. Think step by step about these details and be very specific."
 # )
 
-DEFAULT_QUERY = ("Please describe what you see in the few seconds of the video.")
-
+DEFAULT_PROMPT = (
+    "Briefly describe the objects appearing in the video and their most prominent features, "+ \
+    "such as a black trash can, a fire hydrant, lift door and etc. Specifically focus on the objects, environmental " + \
+        "features, events/activities, and other interesting details." + \
+    "Also briefly describe the entire scene. Keep the entire description as concise as possible."
+)
 
 def image_parser(args):
     # keep original CLI behavior from your file
@@ -68,15 +72,20 @@ class RemoteAPICaptioner(Captioner):
     This class intentionally has no dependency on llava/vila/torch/etc.
     """
 
-    def __init__(self):
-        self.api_base = "http://localhost:11434/v1"
-        self.model = "qwen2.5vl:7b"
-        self.api_key = ""
-        self.timeout = 120
+    def __init__(self, api_base="http://localhost:11434/v1", model_type="qwen2.5vl:7b", args=None):
+        self.api_base = api_base
+        self.model = model_type
+
+        # # TODO
+        # self.api_base = "https://api.siliconflow.cn/v1/"
+        # self.model = "Pro/Qwen/Qwen2.5-VL-7B-Instruct"
+        
+        self.api_key = os.getenv("OPENAI_API_KEY", "")
+        self.timeout = 600
         self.temperature = 0.2
         self.top_p = 0.9
         self.max_new_tokens = 128
-        self.query = DEFAULT_QUERY
+        self.query = DEFAULT_PROMPT
         self.system_prompt = "You are a helpful vision assistant. Describe the image(s) clearly, factual, concise."
 
         print("Use RemoteAPICaptioner:")
@@ -103,7 +112,7 @@ class RemoteAPICaptioner(Captioner):
         # Clean user query: remove legacy placeholders if present
         user_text = self.image_placeholder_pattern.sub("", self.query or "").strip()
         if not user_text:
-            user_text = "Describe the image."
+            user_text = "Please describe what you see in the few seconds of the video. Especially focus on objects and their attributes, like trash can in black, fire hydrant, etc."
 
         user_content = [{"type": "text", "text": user_text}] + image_contents
 

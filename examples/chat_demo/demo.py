@@ -1,72 +1,183 @@
+"""
+Gradio-based chat demo for ReMEmbR agent with Milvus memory backend.
+Supports ROS2 bag processing and raw dataset ingestion.
+"""
 import sys
 sys.path.append(sys.path[0] + '/..')
 
 import argparse
-import gradio as gr
-from pymilvus import MilvusClient
 import subprocess
 import threading
-from typing import List
+from typing import List, Dict, Any
+
+import gradio as gr
+import torch
+from pymilvus import MilvusClient
 
 from remembr.memory.milvus_memory import MilvusMemory, ensure_event_loop
 from remembr.agents.remembr_agent import ReMEmbRAgent
 
-import torch
 torch.multiprocessing.set_start_method('spawn')
 
 
 class StoppableThread(threading.Thread):
-    """Thread class with a stop() method. The thread itself has to check
-    regularly for the stopped() condition."""
+    """Thread with graceful stop capability."""
 
-    def __init__(self,  *args, **kwargs):
-        super(StoppableThread, self).__init__(*args, **kwargs)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self._stop_event = threading.Event()
 
     def stop(self):
+        """Signal the thread to stop."""
         self._stop_event.set()
 
     def stopped(self):
+        """Check if stop has been signaled."""
         return self._stop_event.is_set()
 
 
 class GradioDemo:
-    def __init__(self, args=None):
-        self.args = args
+    """Main Gradio demo application for ReMEmbR agent."""
 
-        if args.rosbag_enabled:
+    def __init__(self, args: argparse.Namespace):
+        self.args = args
+        self.agent = ReMEmbRAgent(llm_type=args.llm_backend)
+        self.db_dict: Dict[str, Any] = {}
+        self.nav_agent = None
+        self.collection_is_set = False
+        self.last_goal_pose = None  # Store last parsed goal pose
+
+        # Initialize ROS2 if needed
+        if args.rosbag_enabled or args.enable_ros2_nav:
             import rclpy
             rclpy.init()
 
+        # Set mode flags
         self.rosbag_enabled = args.rosbag_enabled
-        self.agent = ReMEmbRAgent(llm_type=args.llm_backend)
-        self.db_dict = {}
+        self.raw_dataset_enabled = not args.rosbag_enabled
+        self.enable_ros2_nav = args.enable_ros2_nav
+
+        # Initialize Nav2 agent if enabled
+        if args.enable_ros2_nav:
+            self._init_nav_agent()
 
         self.launch_demo()
 
-    # --- helpers ----------------------------------------------------
+    def _init_nav_agent(self):
+        """Initialize the Nav2 simple agent node."""
+        try:
+            from simple_agent_node import SimpleAgentNode
+            self.nav_agent = SimpleAgentNode()
+            print("Nav2 Simple Agent Node initialized")
+        except Exception as e:
+            print(f"Failed to initialize Nav2 agent: {e}")
+            self.nav_agent = None
+
+    # === Database Operations ===
+
     def _list_collections(self, db_uri: str) -> List[str]:
+        """List all available collections in the Milvus database."""
         ensure_event_loop()
         client = MilvusClient(uri=db_uri)
-        collections = client.list_collections()
-        return collections
+        return client.list_collections()
 
-    def update_remembr(self, db_uri, selection):
+    def update_remembr(self, db_uri: str, collection_name: str):
+        """Update the agent's memory to use the specified collection."""
         ensure_event_loop()
-        ip = db_uri.split('://')[1].split(':')[0]
-        memory = MilvusMemory(selection, db_ip=ip)
+        db_ip = self._extract_db_ip(db_uri)
+        memory = MilvusMemory(collection_name, db_ip=db_ip)
         self.agent.set_memory(memory)
-        print("Set collection to", selection)
+        self.collection_is_set = True
+        print(f"Set collection to: {collection_name}")
 
-    def process_file(self, fileobj, upload_name, pos_topic, image_topic, db_uri):
-        from chat_demo.db_processor import create_and_launch_memory_builder
-        print("Processing file", fileobj.name)
-        self.db_dict['collection_name'] = upload_name
+    def _extract_db_ip(self, db_uri: str) -> str:
+        """Extract IP address from database URI."""
+        return db_uri.split('://')[1].split(':')[0]
+
+    def _validate_collection_name(self, collection_name: str) -> tuple[bool, str]:
+        """
+        Validate collection name according to MilvusDB requirements.
+
+        Rules:
+        - Can only contain numbers, letters, and underscores
+        - Must start with a letter or underscore
+        - Cannot be empty
+
+        Returns:
+            (is_valid, error_message) tuple
+        """
+        if not collection_name or not collection_name.strip():
+            return False, "Collection name is required"
+
+        collection_name = collection_name.strip()
+
+        # Check first character (must be letter or underscore)
+        if not (collection_name[0].isalpha() or collection_name[0] == '_'):
+            return False, "Collection name must start with a letter or underscore"
+
+        # Check all characters (must be alphanumeric or underscore)
+        if not all(c.isalnum() or c == '_' for c in collection_name):
+            return False, "Collection name can only contain letters, numbers, and underscores"
+
+        return True, ""
+
+    # === Dataset Processing ===
+
+    def process_raw_dataset(self, dataset_path: str, collection_name: str, db_uri: str):
+        """Process and ingest a raw dataset into Milvus."""
+        from raw_db_processor import RawDbMemoryBuilder
+
+        print(f"Processing raw dataset: {dataset_path}")
+
+        # Validate collection name
+        is_valid, error_msg = self._validate_collection_name(collection_name)
+        if not is_valid:
+            print(f"Error: {error_msg}")
+            raise gr.Error(error_msg)
+
+        self.db_dict['collection_name'] = collection_name.strip()
+        self.db_dict['db_ip'] = self._extract_db_ip(db_uri)
+        self.db_dict['dataset_path'] = dataset_path
+
+        mem_builder = RawDbMemoryBuilder(
+            self.db_dict['dataset_path'],
+            collection_name=self.db_dict['collection_name'],
+            db_ip=self.db_dict['db_ip']
+        )
+        mem_builder.run()
+        print("Done processing raw dataset")
+
+    def process_file(self, fileobj, collection_name: str, pos_topic: str,
+                     image_topic: str, db_uri: str):
+        """Process a ROS2 bag file and ingest into Milvus."""
+        from ros2_db_processor import create_and_launch_memory_builder, validate_rosbag_topics
+
+        print(f"Processing ROS2 bag file: {fileobj.name}")
+
+        # Validate collection name
+        is_valid, error_msg = self._validate_collection_name(collection_name)
+        if not is_valid:
+            print(f"Error: {error_msg}")
+            raise gr.Error(error_msg)
+
+        # Validate topics in bag file
+        is_valid, message, topics_dict = validate_rosbag_topics(
+            fileobj.name, pos_topic, image_topic
+        )
+
+        if not is_valid:
+            error_msg = f"{message}\nAvailable position topics: {topics_dict['position']}\nAvailable image topics: {topics_dict['image']}"
+            print(error_msg)
+            raise gr.Error(error_msg)
+
+        print(f"Topic validation passed: {message}")
+
+        self.db_dict['collection_name'] = collection_name.strip()
         self.db_dict['pos_topic'] = pos_topic
         self.db_dict['image_topic'] = image_topic
-        self.db_dict['db_ip'] = db_uri.split('://')[1].split(':')[0]
+        self.db_dict['db_ip'] = self._extract_db_ip(db_uri)
 
-        print("launching threading")
+        # Create memory builder
         mem_builder = lambda: create_and_launch_memory_builder(
             None,
             db_ip=self.db_dict['db_ip'],
@@ -75,138 +186,406 @@ class GradioDemo:
             image_topic=self.db_dict['image_topic']
         )
 
-        # launch processing thread
+        # Launch processing thread
         proc = StoppableThread(target=mem_builder)
         proc.start()
 
+        # Play ROS bag
         bag_process = subprocess.Popen(
             ["ros2", "bag", "play", fileobj.name],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.STDOUT
         )
 
-        while True:
-            ret_code = bag_process.poll()
-            if ret_code is not None:
-                print(ret_code, "DONE")
-                proc.stop()
-                break
+        # Wait for bag playback to complete
+        while bag_process.poll() is None:
+            pass
 
-    # --- UI ---------------------------------------------------------
-    def launch_demo(self):
-        # define chatter in here
+        print(f"ROS2 bag playback completed with return code: {bag_process.returncode}")
+        proc.stop()
+
+    def _parse_bag_topics(self, fileobj):
+        """Parse topics from uploaded ROS2 bag file."""
+        from ros2_db_processor import get_rosbag_topics
+
+        if fileobj is None:
+            return gr.update(choices=[], value=None), gr.update(choices=[], value=None), gr.update(visible=False)
+
+        try:
+            topics_dict = get_rosbag_topics(fileobj.name)
+            pos_topics = topics_dict['position']
+            img_topics = topics_dict['image']
+
+            if not pos_topics or not img_topics:
+                msg = []
+                if not pos_topics:
+                    msg.append("No position topics (Odometry/PoseWithCovarianceStamped) found")
+                if not img_topics:
+                    msg.append("No image topics found")
+                raise gr.Error("; ".join(msg))
+
+            # Set default values if available
+            pos_default = pos_topics[0] if pos_topics else None
+            img_default = img_topics[0] if img_topics else None
+
+            return (
+                gr.update(choices=pos_topics, value=pos_default, visible=True),
+                gr.update(choices=img_topics, value=img_default, visible=True),
+                gr.update(visible=True)
+            )
+
+        except Exception as e:
+            raise gr.Error(f"Failed to parse bag file: {str(e)}")
+
+    # === Chat Handling ===
+
+    def _process_agent_stream(self, user_message: str):
+        """Process user message through the agent graph and yield log output."""
+        messages = [("user", user_message)]
+        inputs = {"messages": messages}
+        graph = self.agent.graph
+        log_lines = []
+
+        for output in graph.stream(inputs):
+            for key, value in output.items():
+                log_lines.append("------------")
+                log_lines.append(f"Output from node '{key}':")
+                for item in value["messages"]:
+                    if isinstance(item, tuple):
+                        log_lines.append(item[1])
+                    else:
+                        content = item if isinstance(item, str) else item.content
+                        log_lines.append(content)
+                    log_lines.append("\n")
+            yield output, "\n".join(log_lines)
+
+    def _extract_goal_pose(self, response_text: str):
+        """Extract goal pose [x, y, yaw] from response text."""
+        import re
+        pattern = r'\[\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*\]'
+        match = re.search(pattern, response_text)
+
+        if match:
+            x = float(match.group(1))
+            y = float(match.group(2))
+            yaw = float(match.group(3))
+            return {"x": x, "y": y, "yaw": yaw}
+        return None
+
+
+    def _create_chat_handler(self):
+        """Create the chat message handler function."""
         def chatter(user_message, history, log_text):
             """
-            使用 Chatbot(type='messages') 的回调：
-            - history: List[{'role': 'user'|'assistant', 'content': str}]
-            - 返回：(new_msg_input, new_history, new_log_text)
+            Chat handler for Gradio Chatbot with type='messages'.
+            Args:
+                user_message: User's input message
+                history: Chat history as list of dicts with 'role' and 'content'
+                log_text: Current log text
+            Yields:
+                Tuple of (input_box, updated_history, updated_log, goal_pose_text)
             """
             history = history or []
-            # 先把用户消息  占位的助手消息放入历史
+
+            # Show user message with placeholder assistant response
             temp_history = history + [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": "..."},
             ]
-            # 第一次刷新：清空输入框，展示占位应答，清空/保留日志
-            yield "", temp_history, ""
+            yield "", temp_history, "", ""
 
-            # 你的业务推理部分
-            messages = [("user", user_message)]
-            inputs = {"messages": messages}
-            graph = self.agent.graph
-            log_lines = []
+            # Process through agent
+            final_output = None
+            final_log = ""
+            for output, log in self._process_agent_stream(user_message):
+                final_output = output
+                final_log = log
+                yield "", temp_history, log, ""
 
-            for output in graph.stream(inputs):
-                for key, value in output.items():
-                    log_lines.append("------------")
-                    log_lines.append(f"Output from node '{key}':")
-                    for item in value["messages"]:
-                        if isinstance(item, tuple):
-                            log_lines.append(item[1])
-                        else:
-                            if isinstance(item, str):
-                                log_lines.append(item)
-                            else:
-                                log_lines.append(item.content)
-                        log_lines.append("\n")
-                # 中间流式刷新日志（回答仍保持为 "..."）
-                yield "", temp_history, "\n".join(log_lines)
-
-            # 生成最终回答
-            response_msg = output["generate"]["messages"][-1]
+            # Extract final response
+            response_msg = final_output["generate"]["messages"][-1]
             out_dict = eval(response_msg)
             response_text = out_dict["text"]
 
-            chat_history = (history or []) + [
+            # Extract and store goal pose
+            goal_pose = self._extract_goal_pose(response_text)
+            goal_text = ""
+            if goal_pose:
+                self.last_goal_pose = goal_pose
+                goal_text = f"x: {goal_pose['x']:.2f}\ny: {goal_pose['y']:.2f}\nyaw: {goal_pose['yaw']:.2f}"
+
+            # Update chat history with final response
+            chat_history = history + [
                 {"role": "user", "content": user_message},
                 {"role": "assistant", "content": response_text},
             ]
-            yield "", chat_history, "\n".join(log_lines)
+            yield "", chat_history, final_log, goal_text
+
+        return chatter
+
+    # === UI Layout ===
+
+    def launch_demo(self):
+        """Build and launch the Gradio demo interface."""
+        chatter = self._create_chat_handler()
 
         with gr.Blocks() as demo:
-            with gr.Row():
-                with gr.Column(scale=2):
-                    chatbot = gr.Chatbot(type="messages", label="Chat", height=500)
-                    msg = gr.Textbox(label="Message Input", placeholder="Type your message and press Enter")
-                    clear = gr.Button("Clear")
-                with gr.Column(scale=1):
-                    output_log = gr.Textbox(label="Inference log", lines=16)
+            # Build chat section and get components
+            chatbot, msg, output_log, db_uri_box, selector, goal_pose_box, send_goal_btn = self._build_chat_section(chatter)
 
-                with gr.Column(scale=1):
-                    db_uri_box = gr.Textbox(label="Database URI", value=self.args.db_uri)
-                    selector = gr.Dropdown(choices=[], label="Select Collection", interactive=True)
-                    with gr.Row():
-                        refresh = gr.Button("Refresh Collections")
-                        set_btn = gr.Button("Set Collection")
+            # Build upload section with db_uri_box reference
+            self._build_upload_section(db_uri_box)
 
-            # 事件绑定
-            msg.submit(chatter, [msg, chatbot, output_log], [msg, chatbot, output_log])
+            demo.queue()
+            demo.launch(
+                server_name=self.args.chatbot_host_ip,
+                server_port=self.args.chatbot_host_port
+            )
 
-            # 清空按钮：清空聊天与输入框与日志
-            clear.click(lambda: ([], "", ""), outputs=[chatbot, msg, output_log])
+    def _build_chat_section(self, chatter):
+        """Build the main chat interface section and return key components."""
+        with gr.Row():
+            # Chat column
+            with gr.Column(scale=2):
+                chatbot = gr.Chatbot(type="messages", label="Chat", height=500)
+                msg = gr.Textbox(
+                    label="Message Input",
+                    placeholder="Please set a collection first...",
+                    interactive=False
+                )
+                clear = gr.Button("Clear")
 
-            # 首次载入时和点击刷新按钮时，更新下拉框选项
-            def _update_collections(db_uri):
-                try:
-                    return gr.update(choices=self._list_collections(db_uri))
-                except Exception as e:
-                    # 出错时保底：不改变现有 choices，但给个占位
-                    return gr.update(choices=["<failed to load>"])
+            # Log column
+            with gr.Column(scale=1):
+                output_log = gr.Textbox(label="Inference log", lines=16)
 
-            demo.load(_update_collections, inputs=[db_uri_box], outputs=[selector])
-            refresh.click(_update_collections, inputs=[db_uri_box], outputs=[selector])
-
-            # 设置被选中的 collection
-            set_btn.click(self.update_remembr, inputs=[db_uri_box, selector], outputs=[])
-
-            # 仅在启用 ROS 时展示上传区
-            if self.rosbag_enabled:
+            # Database control column
+            with gr.Column(scale=1):
+                db_uri_box = gr.Textbox(label="Database URI", value=self.args.db_uri)
+                selector = gr.Dropdown(choices=[], label="Select Collection", interactive=True)
                 with gr.Row():
-                    with gr.Column(scale=1):
-                        upload_name = gr.Textbox(label="Name of new DB collection")
-                        pos_topic = gr.Textbox(label="Position Topic", value="/amcl_pose")
-                        image_topic = gr.Textbox(label="Image Topic", value="/camera/color/image_raw")
-                        file_upload = gr.File(label="ROS2 Bag File")
-                        file_upload.upload(
-                            self.process_file,
-                            inputs=[file_upload, upload_name, pos_topic, image_topic, db_uri_box],
-                            outputs=[]
+                    refresh = gr.Button("Refresh Collections")
+                    set_btn = gr.Button("Set Collection")
+
+                # Navigation goal widget (only show if ROS2 nav is enabled)
+                if self.enable_ros2_nav:
+                    gr.Markdown("### Navigation Goal")
+                    goal_pose_box = gr.Textbox(
+                        label="Goal Pose",
+                        value="",
+                        lines=3,
+                        interactive=False,
+                        placeholder="No goal detected"
+                    )
+                    send_goal_btn = gr.Button("Send Goal", variant="primary", interactive=False)
+                else:
+                    goal_pose_box = gr.Textbox(visible=False)
+                    send_goal_btn = gr.Button(visible=False)
+
+        # Event handlers
+        msg.submit(chatter, [msg, chatbot, output_log], [msg, chatbot, output_log, goal_pose_box])
+        clear.click(lambda: ([], "", "", ""), outputs=[chatbot, msg, output_log, goal_pose_box])
+
+        # Collection management
+        def update_collections(db_uri):
+            try:
+                return gr.update(choices=self._list_collections(db_uri))
+            except Exception as e:
+                return gr.update(choices=["<failed to load>"])
+
+        def set_collection_and_enable(db_uri, collection_name):
+            """Set collection and enable message input."""
+            self.update_remembr(db_uri, collection_name)
+            return gr.update(interactive=True, placeholder="Type your message and press Enter")
+
+        refresh.click(update_collections, inputs=[db_uri_box], outputs=[selector])
+        set_btn.click(
+            set_collection_and_enable,
+            inputs=[db_uri_box, selector],
+            outputs=[msg]
+        )
+
+        # Navigation goal sending
+        if self.enable_ros2_nav:
+            def send_goal_manual():
+                """Send the last stored goal pose."""
+                if self.last_goal_pose:
+                    self.nav_agent.send_goal(self.last_goal_pose["x"],
+                        self.last_goal_pose["y"],
+                        self.last_goal_pose["yaw"]
+                    )
+            # Enable send button when goal is detected
+            def update_send_button(goal_text):
+                if goal_text:
+                    return gr.update(interactive=True)
+                return gr.update(interactive=False)
+
+            goal_pose_box.change(update_send_button, inputs=[goal_pose_box], outputs=[send_goal_btn])
+            send_goal_btn.click(send_goal_manual)
+
+        return chatbot, msg, output_log, db_uri_box, selector, goal_pose_box, send_goal_btn
+
+    def _build_upload_section(self, db_uri_box):
+        """Build the dataset upload section based on enabled mode."""
+        if self.rosbag_enabled:
+            self._build_rosbag_upload(db_uri_box)
+        elif self.raw_dataset_enabled:
+            self._build_raw_dataset_upload(db_uri_box)
+        else:
+            gr.Markdown("**ROS2 is not enabled, file upload disabled.**")
+
+    def _build_rosbag_upload(self, db_uri_box):
+        """Build ROS2 bag file upload interface."""
+        with gr.Row():
+            with gr.Column(scale=1):
+                file_upload = gr.File(label="ROS2 Bag File")
+
+                # Topic selection (initially hidden)
+                pos_topic = gr.Dropdown(
+                    choices=[],
+                    label="Position Topic",
+                    visible=False
+                )
+                image_topic = gr.Dropdown(
+                    choices=[],
+                    label="Image Topic",
+                    visible=False
+                )
+
+                # Configuration section (initially hidden)
+                with gr.Group(visible=False) as config_group:
+                    upload_name = gr.Textbox(
+                        label="Name of new DB collection",
+                        info="Must start with letter/underscore, contain only letters, numbers, and underscores"
+                    )
+                    name_validation = gr.Markdown("", visible=False)
+                    start_btn = gr.Button("Start Processing", variant="primary", interactive=False)
+
+                # Upload triggers topic parsing
+                file_upload.upload(
+                    self._parse_bag_topics,
+                    inputs=[file_upload],
+                    outputs=[pos_topic, image_topic, config_group]
+                )
+
+                # Enable start button when collection name is valid
+                def validate_and_enable(collection_name):
+                    is_valid, error_msg = self._validate_collection_name(collection_name)
+                    if not collection_name or not collection_name.strip():
+                        return gr.update(interactive=False), gr.update(visible=False)
+                    elif is_valid:
+                        return gr.update(interactive=True), gr.update(visible=False)
+                    else:
+                        return (
+                            gr.update(interactive=False),
+                            gr.update(value=f"❌ {error_msg}", visible=True)
                         )
 
-        # v4：不传参最稳，默认就启用队列与并发控制
-        demo.queue()
-        demo.launch(server_name=self.args.chatbot_host_ip, server_port=self.args.chatbot_host_port)
+                upload_name.change(
+                    validate_and_enable,
+                    inputs=[upload_name],
+                    outputs=[start_btn, name_validation]
+                )
+
+                # Start processing
+                start_btn.click(
+                    self.process_file,
+                    inputs=[file_upload, upload_name, pos_topic, image_topic, db_uri_box],
+                    outputs=[]
+                )
+
+    def _build_raw_dataset_upload(self, db_uri_box):
+        """Build raw dataset upload interface."""
+        with gr.Row():
+            with gr.Column(scale=1):
+                upload_name = gr.Textbox(
+                    label="Name of new DB collection",
+                    info="Must start with letter/underscore, contain only letters, numbers, and underscores"
+                )
+                name_validation = gr.Markdown("", visible=False)
+                dataset_path = gr.Textbox(label="Raw Dataset Folder Path")
+                submit_btn = gr.Button("Process Raw Dataset", interactive=False)
+
+                def update_submit_state(collection_name, dataset_path):
+                    """Enable submit button only when all fields are valid."""
+                    # Check if dataset path is filled
+                    path_filled = dataset_path and dataset_path.strip()
+
+                    # Validate collection name
+                    is_valid, error_msg = self._validate_collection_name(collection_name)
+
+                    if not collection_name or not collection_name.strip():
+                        return gr.update(interactive=False), gr.update(visible=False)
+                    elif not is_valid:
+                        return (
+                            gr.update(interactive=False),
+                            gr.update(value=f"❌ {error_msg}", visible=True)
+                        )
+                    elif is_valid and path_filled:
+                        return gr.update(interactive=True), gr.update(visible=False)
+                    else:
+                        return gr.update(interactive=False), gr.update(visible=False)
+
+                # Update submit button state on text changes
+                for textbox in [upload_name, dataset_path]:
+                    textbox.change(
+                        update_submit_state,
+                        inputs=[upload_name, dataset_path],
+                        outputs=[submit_btn, name_validation]
+                    )
+
+                submit_btn.click(
+                    self.process_raw_dataset,
+                    inputs=[dataset_path, upload_name, db_uri_box],
+                    outputs=[]
+                )
 
 
-# ----------------- main -----------------
+
+# === Main Entry Point ===
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Launch Gradio demo for ReMEmbR agent with Milvus memory"
+    )
+    parser.add_argument(
+        "--db_uri",
+        type=str,
+        default="http://127.0.0.1:19530",
+        help="Milvus database URI"
+    )
+    parser.add_argument(
+        "--chatbot_host_ip",
+        type=str,
+        default="0.0.0.0",
+        help="Host IP for Gradio server"
+    )
+    parser.add_argument(
+        "--chatbot_host_port",
+        type=int,
+        default=7860,
+        help="Port for Gradio server"
+    )
+    parser.add_argument(
+        "--llm_backend",
+        type=str,
+        default='qwen3-235b-a22b',
+        help="LLM backend to use, e.g., 'qwen3-235b-a22b', 'gpt-4o'"
+    )
+    parser.add_argument(
+        "--rosbag_enabled",
+        action='store_true',
+        help="Enable ROS2 bag file processing"
+    )
+    parser.add_argument(
+        "--enable_ros2_nav",
+        action='store_true',
+        help="Enable ROS2 Nav2 navigation goal sending"
+    )
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--db_uri", type=str, default="http://127.0.0.1:19530")
-    parser.add_argument("--chatbot_host_ip", type=str, default="localhost")
-    parser.add_argument("--chatbot_host_port", type=int, default=7860)
-    # Options: 'nim/meta/llama-3.1-405b-instruct', 'gpt-4o', or any Ollama LLMs
-    parser.add_argument("--llm_backend", type=str, default='codestral')
-    parser.add_argument("--rosbag_enabled", action='store_true')
-
-    args = parser.parse_args()
+    args = parse_arguments()
     demo = GradioDemo(args)

@@ -12,18 +12,107 @@ from cv_bridge import CvBridge
 bridge = CvBridge()
 
 import argparse
-
+import subprocess
 import time
 
 import pprint
 
 from remembr.captioners.remote_captioner import RemoteAPICaptioner
+from remembr.captioners.qwen_captioner import QwenVLCaptioner
 
 from remembr.memory.memory import MemoryItem
 from remembr.memory.milvus_memory import MilvusMemory
 from PIL import Image as im
 
 import concurrent
+
+try:
+    import rosbag2_py
+except ImportError:
+    rosbag2_py = None
+
+
+def get_rosbag_topics(bag_path: str) -> dict:
+    """
+    Get all topics and their types from a ROS2 bag file using rosbag2_py.
+
+    Returns:
+        dict: {'position': [...], 'image': [...], 'all': {topic: type, ...}}
+    """
+    if rosbag2_py is None:
+        raise ImportError("rosbag2_py is not available. Please install ros2bag.")
+
+    try:
+        # Create reader
+        storage_options = rosbag2_py.StorageOptions(uri=bag_path, storage_id='sqlite3')
+        converter_options = rosbag2_py.ConverterOptions(
+            input_serialization_format='cdr',
+            output_serialization_format='cdr'
+        )
+        reader = rosbag2_py.SequentialReader()
+        reader.open(storage_options, converter_options)
+
+        # Get topic metadata
+        topic_types = reader.get_all_topics_and_types()
+
+        all_topics = {}
+        position_topics = []
+        image_topics = []
+
+        for topic_metadata in topic_types:
+            topic_name = topic_metadata.name
+            topic_type = topic_metadata.type
+            all_topics[topic_name] = topic_type
+
+            # Categorize topics by type
+            if 'Odometry' in topic_type or 'PoseWithCovarianceStamped' in topic_type:
+                position_topics.append(topic_name)
+            elif 'Image' in topic_type:
+                image_topics.append(topic_name)
+
+        return {
+            'position': position_topics,
+            'image': image_topics,
+            'all': all_topics
+        }
+
+    except Exception as e:
+        raise Exception(f"Error reading bag file: {str(e)}")
+
+
+def validate_rosbag_topics(bag_path: str, pos_topic: str = None, image_topic: str = None) -> tuple:
+    """
+    Validate that the specified topics exist in the ROS2 bag file.
+    If pos_topic and image_topic are None, just return available topics.
+
+    Returns:
+        tuple: (is_valid: bool, message: str, available_topics: dict)
+               available_topics = {'position': [...], 'image': [...], 'all': {...}}
+    """
+    try:
+        topics_dict = get_rosbag_topics(bag_path)
+
+        # If no specific topics requested, just return available topics
+        if pos_topic is None and image_topic is None:
+            return True, "Topics parsed successfully", topics_dict
+
+        # Validate specific topics if provided
+        position_topics = topics_dict['position']
+        image_topics = topics_dict['image']
+
+        missing_topics = []
+        if pos_topic and pos_topic not in position_topics:
+            missing_topics.append(f"{pos_topic} (not a valid position topic)")
+        if image_topic and image_topic not in image_topics:
+            missing_topics.append(f"{image_topic} (not a valid image topic)")
+
+        if missing_topics:
+            return False, f"Topics not found: {', '.join(missing_topics)}", topics_dict
+
+        return True, "Topics validated successfully", topics_dict
+
+    except Exception as e:
+        return False, f"Error: {str(e)}", {'position': [], 'image': [], 'all': {}}
 
 
 def memory_builder_args(args=None):
@@ -106,7 +195,9 @@ class ROSMemoryBuilder(Node):
 
         self.counter = 0
 
-        self.captioner = RemoteAPICaptioner()
+        # self.captioner = RemoteAPICaptioner()
+        self.captioner = QwenVLCaptioner()
+
         self.memory = MilvusMemory(collection_name, db_ip=db_ip)
         print("Initialized ROSMemoryBuilder")
 
@@ -197,7 +288,7 @@ class ROSMemoryBuilder(Node):
         orientations = pose_dict['orientation']
 
         out_text = out_text = self.captioner.caption(images)
-        # print(out_text)
+        print(out_text)
 
         mid_time = (image_buffer[0]['time'] + image_buffer[-1]['time'])/2
 
